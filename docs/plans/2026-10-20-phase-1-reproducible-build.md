@@ -17,7 +17,7 @@
 5. `docs/hardware-checks.md`: what to compare on a real XE24 (`/proc/version`, `/proc/config.gz` against `out/config`) before any boot test.
 
 ## Rulings
-- Ubuntu 16.04 (GCC 5) fails on `linux/compiler-gcc5.h`. The build uses Ubuntu 14.04 (GCC 4.8) so the tree stays unpatched; task 3 is empty for now. Cost if wrong: an EOL base image, to be replaced with a GCC 5+ patchset later.
+- Ubuntu 16.04 (GCC 5) fails on `linux/compiler-gcc5.h`. The build uses Ubuntu 14.04 (GCC 4.7) so the tree stays unpatched; task 3 is empty for now. Cost if wrong: an EOL base image, to be replaced with a GCC 5+ patchset later.
 
 ## Done when
 CI is green and produces a `zImage`, and two builds of the same commit report the same `out/config`.

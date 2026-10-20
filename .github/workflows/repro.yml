@@ -2,7 +2,7 @@ name: repro
 on:
   workflow_dispatch:
   pull_request:
-    paths: [scripts/check-reproducible.sh, .github/workflows/repro.yml]
+    paths: [scripts/build.sh, scripts/check-reproducible.sh, Dockerfile, .github/workflows/repro.yml]
 permissions:
   contents: read
 jobs:

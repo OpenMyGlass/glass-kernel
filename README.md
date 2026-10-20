@@ -14,7 +14,7 @@ The kernel tree is not vendored. `scripts/fetch-source.sh` makes a shallow clone
 
 ## Building
 
-The 3.4 kernel needs an old GCC, so builds run in a pinned container (`Dockerfile`: Ubuntu 14.04, `gcc-arm-linux-gnueabi` 4.8, which builds the tree without patches):
+The 3.4 kernel needs an old GCC, so builds run in a pinned container (`Dockerfile`: Ubuntu 14.04, `gcc-arm-linux-gnueabi` 4.7 (Linaro 4.7.3), which builds the tree without patches):
 
 ```sh
 scripts/build-in-container.sh    # docker or podman: fetches src/ and builds
@@ -22,7 +22,7 @@ scripts/build-in-container.sh    # docker or podman: fetches src/ and builds
 
 The kernel tree is kept in a container volume (`glass-kernel-src`) because Linux 3.4 has paths that differ only by case, which a default macOS volume cannot hold.
 
-The output is `out/zImage` plus `out/config` and `out/SHA256SUMS`. GitHub Actions runs the same build on every push.
+The output is `out/zImage` plus `out/config` and `out/SHA256SUMS`. Builds are bit-for-bit reproducible: `scripts/check-reproducible.sh` (the `repro` workflow) builds twice and compares `Image`, `vmlinux` and `zImage`. `__DATE__`/`__TIME__`, which the `bcmdhd` Wi-Fi driver embeds, are pinned to the source commit date. GitHub Actions runs the same build on every push.
 
 ## Safety
 
