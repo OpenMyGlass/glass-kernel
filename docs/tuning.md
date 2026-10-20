@@ -37,12 +37,13 @@ So above about 35 °C, which is normal when Glass is worn, the CPU is already li
 - **balanced** keeps bursts up to 1008 MHz, but goes to 600 MHz first instead of straight to the maximum.
 - **cool** never uses the 1.388 V NITRO point. It mostly differs from stock when Glass is cool, for example right after waking up.
 
-To try one over adb (needs root; see glass-rom):
+To try one over adb (needs root adb, from glass-rom's insecure boot image):
 
 ```sh
+adb root
 adb push tuning/omg-tune.sh /data/local/tmp/
-adb shell su -c 'sh /data/local/tmp/omg-tune.sh cool'
-adb shell su -c 'sh /data/local/tmp/omg-tune.sh status'
+adb shell sh /data/local/tmp/omg-tune.sh cool
+adb shell sh /data/local/tmp/omg-tune.sh status
 ```
 
 ## The `tuned` build
