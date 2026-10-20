@@ -1,13 +1,18 @@
 name: build
 on:
   push:
+    branches: [main]
   pull_request:
+permissions:
+  contents: read
 jobs:
   kernel:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - run: scripts/fetch-source.sh
+        with:
+          persist-credentials: false
       - run: scripts/build-in-container.sh
       - uses: actions/upload-artifact@v4
         with:

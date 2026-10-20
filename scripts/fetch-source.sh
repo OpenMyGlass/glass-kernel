@@ -2,12 +2,8 @@
 # Fetch Google's Glass kernel source (GPL-2.0) at the pinned commit into src/.
 set -eu
 
-REPO=https://android.googlesource.com/kernel/omap
-BRANCH=glass-omap-xrx13b
-COMMIT=989d925476700c0d07a75008b37725cbc558f862
-EXPECTED_VERSION=3.4.94
-
 cd "$(dirname "$0")/.."
+. scripts/source.env
 
 if [ ! -d src/.git ]; then
     git init -q src
