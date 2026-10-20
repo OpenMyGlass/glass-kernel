@@ -14,7 +14,7 @@ The kernel tree is not vendored. `scripts/fetch-source.sh` makes a shallow clone
 
 ## Building
 
-The 3.4 kernel needs an old GCC, so builds run in a pinned container (`Dockerfile`, Ubuntu 16.04, `gcc-arm-linux-gnueabi` 5.x):
+The 3.4 kernel needs an old GCC, so builds run in a pinned container (`Dockerfile`: Ubuntu 14.04, `gcc-arm-linux-gnueabi` 4.8, which builds the tree without patches):
 
 ```sh
 scripts/fetch-source.sh
