@@ -54,6 +54,7 @@ case "${1:-}" in
     *) echo "usage: $0 stock|balanced|cool|status" >&2; exit 2 ;;
 esac
 
+# shellcheck disable=SC2046 # word splitting into the positional values is intended
 set -- $(profile_values "$1")
 put "$POLICY/scaling_max_freq" "$1"
 if [ "$(cat "$POLICY/scaling_governor" 2>/dev/null)" = interactive ]; then
