@@ -29,6 +29,12 @@ done
 export ARCH=arm CROSS_COMPILE=arm-linux-gnueabi- \
     KBUILD_BUILD_USER=openmyglass KBUILD_BUILD_HOST=build KBUILD_BUILD_VERSION=1 \
     KBUILD_BUILD_TIMESTAMP="$(git -C src log -1 --format=%cD)"
+# Some drivers (bcmdhd) embed __DATE__/__TIME__; pin them to the source commit date so
+# two builds of the same commit are bit-identical. GCC 4.7 predates SOURCE_DATE_EPOCH.
+commit_epoch=$(git -C src log -1 --format=%ct)
+build_date=$(date -u -d "@$commit_epoch" '+%b %e %Y')
+build_time=$(date -u -d "@$commit_epoch" '+%H:%M:%S')
+export KCFLAGS="-Wno-builtin-macro-redefined -D__DATE__=\"\\\"$build_date\\\"\" -D__TIME__=\"\\\"$build_time\\\"\""
 make -C src O="$BUILD" notle_defconfig
 make -C src O="$BUILD" -j"$(nproc)" zImage
 
