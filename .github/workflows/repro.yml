@@ -1,0 +1,19 @@
+name: repro
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: [scripts/check-reproducible.sh, .github/workflows/repro.yml]
+permissions:
+  contents: read
+jobs:
+  repro:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: |
+          docker build --platform linux/amd64 -t glass-kernel-build .
+          docker run --rm --platform linux/amd64 -v "$PWD:/work" -v glass-kernel-src:/work/src glass-kernel-build \
+            sh -c 'scripts/fetch-source.sh && scripts/check-reproducible.sh'
