@@ -9,15 +9,29 @@ jobs:
   kernel:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      matrix:
+        variant: [stock, tuned]
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - run: scripts/build-in-container.sh
+        env:
+          VARIANT: ${{ matrix.variant }}
       - uses: actions/upload-artifact@v4
         with:
-          name: kernel
+          name: kernel-${{ matrix.variant }}
           path: |
             out/zImage
             out/config
             out/SHA256SUMS
+  tuning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: sh tests/test_omg_tune.sh
+      - run: shellcheck -s sh tuning/omg-tune.sh tests/test_omg_tune.sh

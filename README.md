@@ -4,6 +4,8 @@ Kernel builds for Google Glass Explorer Edition on its final firmware, XE24 (TI 
 
 ## Status
 
+Phase 2: tuning prepared, not yet measured on hardware. There are runtime profiles (`tuning/omg-tune.sh`: `stock`, `balanced`, `cool`) and a `tuned` build variant (deadline I/O scheduler, no debug-only statistics). See [`docs/tuning.md`](docs/tuning.md).
+
 Phase 1: a reproducible build of Google's published kernel source, with no changes yet. Nothing here has been run on hardware yet.
 
 ## Source

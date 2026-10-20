@@ -9,5 +9,5 @@ engine=$(command -v docker || command -v podman || true)
 "$engine" build --platform linux/amd64 -t glass-kernel-build .
 "$engine" run --rm --platform linux/amd64 \
     -v "$PWD:/work:Z" -v glass-kernel-src:/work/src \
-    -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+    -e VARIANT="${VARIANT:-stock}" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
     glass-kernel-build sh -c 'scripts/fetch-source.sh && scripts/build.sh && chown -R "$HOST_UID:$HOST_GID" out'
