@@ -48,7 +48,7 @@ make -C src O="$BUILD" notle_defconfig
 opt_name() { echo "${1#CONFIG_}"; }
 if [ "$VARIANT" = tuned ]; then
     # Apply the fragment, let Kconfig resolve dependencies, then check nothing was dropped.
-    grep -v '^#\( \|$\)' configs/tuned.config | grep . > "$BUILD/fragment"
+    grep -v '^#\( \|$\)' configs/tuned.config | grep . > "$BUILD/fragment" || true
     while read -r line; do
         case "$line" in
             *=y) src/scripts/config --file "$BUILD/.config" --enable "$(opt_name "${line%%=*}")" ;;

@@ -3,7 +3,7 @@
 **Goal:** Prepare the tuning that can be done without hardware, in two separate, reversible parts. Nothing is tested on a device in this phase; the measurement plan is part of the deliverable.
 
 1. **Runtime profiles** (`tuning/omg-tune.sh`): writes cpufreq/interactive/I/O scheduler values through sysfs.
-   - `stock` restores Google's defaults, `balanced` changes ramp behaviour only, `cool` also caps the CPU at 800 MHz.
+   - `stock` restores the kernel's defaults, `balanced` changes ramp behaviour only, `cool` also caps the CPU at 800 MHz.
    - `status` prints the current values.
    - It never edits the kernel, so a reboot always returns to stock. glass-rom will install it later.
 2. **A `tuned` build variant** (config fragment `configs/tuned.config`): build-only options that are safe on their own.

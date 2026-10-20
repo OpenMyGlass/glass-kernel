@@ -3,7 +3,8 @@
 #
 #   omg-tune.sh stock|balanced|cool|status
 #
-# Nothing is persistent: a reboot returns to the kernel defaults ("stock"). Each
+# Nothing is persistent: a reboot returns to the defaults of the running kernel build
+# and of the system's init scripts, which may set their own values (see docs/tuning.md). Each
 # value is written only if its file exists and is read back; failures are reported
 # and skipped, never fatal, because this runs at boot. Exit status: 0 all applied,
 # 1 some values could not be applied, 2 usage error.
@@ -25,6 +26,14 @@ profile_values() {
     esac
 }
 
+matches() {  # read-back expected
+    # Kernel formats: target_loads ends with a space; schedulers show the active one in [].
+    case "$1" in
+        "$2"|"$2 "|*"[$2]"*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 put() {  # file value
     if [ ! -w "$1" ]; then
         echo "omg-tune: skipped $1 (missing or not writable)" >&2
@@ -33,10 +42,10 @@ put() {  # file value
     fi
     echo "$2" > "$1" 2>/dev/null
     got=$(cat "$1" 2>/dev/null)
-    case "$got" in
-        "$2"|*"[$2]"*) ;;
-        *) echo "omg-tune: $1 is '$got' after writing '$2'" >&2; failed=1 ;;
-    esac
+    if ! matches "$got" "$2"; then
+        echo "omg-tune: $1 is '$got' after writing '$2'" >&2
+        failed=1
+    fi
 }
 
 status() {
@@ -47,6 +56,9 @@ status() {
     done
     return 0
 }
+
+# Tests source the functions only.
+[ -n "${OMG_LIB:-}" ] && return 0
 
 case "${1:-}" in
     status) status; exit 0 ;;

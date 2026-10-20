@@ -17,13 +17,22 @@ setup() {
               min_sample_time=80000 timer_rate=20000; do
         echo "${kv#*=}" > "$gov/${kv%%=*}"
     done
-    echo "noop deadline [cfq]" > "$q/scheduler"
+    echo "90 " > "$gov/target_loads"
+    echo "noop deadline [cfq] " > "$q/scheduler"
 }
 val() { cat "$root/sys/$1"; }
 check() {  # name expected actual
     if [ "$2" != "$3" ]; then echo "FAIL: $1: expected '$2', got '$3'"; fail=1; fi
 }
 run() { OMG_SYSFS="$root/sys" sh "$tune" "$@"; }
+
+# Read-back comparison, with the kernel's formats: target_loads prints a trailing space,
+# the scheduler file lists every scheduler with the active one in brackets.
+lib() { (OMG_LIB=1 . "$tune"; "$@"); }
+lib matches "85 " 85 || { echo "FAIL: '85 ' should match 85"; fail=1; }
+lib matches "noop [deadline] cfq " deadline || { echo "FAIL: bracketed scheduler should match"; fail=1; }
+lib matches "8 " 85 && { echo "FAIL: '8 ' should not match 85"; fail=1; }
+lib matches "noop deadline [cfq] " deadline && { echo "FAIL: inactive scheduler should not match"; fail=1; }
 
 setup
 run cool >/dev/null 2>&1; check "cool exit" 0 $?
