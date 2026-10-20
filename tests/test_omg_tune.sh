@@ -28,8 +28,7 @@ run() { OMG_SYSFS="$root/sys" sh "$tune" "$@"; }
 
 # Read-back comparison, with the kernel's formats: target_loads prints a trailing space,
 # the scheduler file lists every scheduler with the active one in brackets.
-# shellcheck source=tuning/omg-tune.sh
-lib() { (OMG_LIB=1 . "$tune"; "$@"); }
+lib() { OMG_LIB=1 sh -c '. "$0" && "$@"' "$tune" "$@"; }
 lib matches "85 " 85 || { echo "FAIL: '85 ' should match 85"; fail=1; }
 lib matches "noop [deadline] cfq " deadline || { echo "FAIL: bracketed scheduler should match"; fail=1; }
 lib matches "8 " 85 && { echo "FAIL: '8 ' should not match 85"; fail=1; }
