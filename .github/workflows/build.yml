@@ -34,4 +34,4 @@ jobs:
         with:
           persist-credentials: false
       - run: sh tests/test_omg_tune.sh
-      - run: shellcheck -s sh tuning/omg-tune.sh tests/test_omg_tune.sh
+      - run: shellcheck -x -s sh tuning/omg-tune.sh tests/test_omg_tune.sh
