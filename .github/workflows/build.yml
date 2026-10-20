@@ -1,0 +1,18 @@
+name: build
+on:
+  push:
+  pull_request:
+jobs:
+  kernel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/fetch-source.sh
+      - run: scripts/build-in-container.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kernel
+          path: |
+            out/zImage
+            out/config
+            out/SHA256SUMS
