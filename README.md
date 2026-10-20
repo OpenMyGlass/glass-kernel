@@ -10,16 +10,17 @@ Phase 1: a reproducible build of Google's published kernel source, with no chang
 
 Google publishes the Glass kernel in [`kernel/omap`](https://android.googlesource.com/kernel/omap) as `glass-omap-*` branches. The newest one, `glass-omap-xrx13b`, is Linux 3.4.94, which matches the version reported for the XE24 factory kernel. It is still unconfirmed which branch XE24 was built from; the check is described in [`docs/hardware-checks.md`](docs/hardware-checks.md).
 
-The kernel tree is not vendored. `scripts/fetch-source.sh` makes a shallow clone of the pinned branch into `src/`.
+The kernel tree is not vendored. `scripts/fetch-source.sh` makes a shallow clone of the pinned commit (`scripts/source.env`) into `src/`. It runs in the container. `src/` is managed by the scripts: local edits there are discarded on each build.
 
 ## Building
 
-The 3.4 kernel needs an old GCC, so builds run in a pinned container (`Dockerfile`, Ubuntu 16.04, `gcc-arm-linux-gnueabi` 5.x):
+The 3.4 kernel needs an old GCC, so builds run in a pinned container (`Dockerfile`: Ubuntu 14.04, `gcc-arm-linux-gnueabi` 4.8, which builds the tree without patches):
 
 ```sh
-scripts/fetch-source.sh
-scripts/build-in-container.sh    # docker or podman
+scripts/build-in-container.sh    # docker or podman: fetches src/ and builds
 ```
+
+The kernel tree is kept in a container volume (`glass-kernel-src`) because Linux 3.4 has paths that differ only by case, which a default macOS volume cannot hold.
 
 The output is `out/zImage` plus `out/config` and `out/SHA256SUMS`. GitHub Actions runs the same build on every push.
 
