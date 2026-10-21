@@ -136,11 +136,32 @@ setup
 OMG_SYSFS="$root/sys" lib hispeed_before_max 800000 && { echo "FAIL: lower hispeed should go after max"; fail=1; }
 OMG_SYSFS="$root/sys" lib hispeed_before_max 1008000 || { echo "FAIL: equal hispeed should go first"; fail=1; }
 echo 800000 > "$pol/scaling_max_freq"
+echo 800000 > "$gov/hispeed_freq"
 OMG_SYSFS="$root/sys" lib hispeed_before_max 1008000 || { echo "FAIL: higher hispeed should go first"; fail=1; }
 run stock >/dev/null 2>&1
 check "cool to stock max" 1008000 "$(val devices/system/cpu/cpu0/cpufreq/scaling_max_freq)"
 check "cool to stock hispeed" 1008000 "$(val devices/system/cpu/cpufreq/interactive/hispeed_freq)"
 rm -rf "$root"
+lib spaced "90,800000:95" | grep -qx "90 800000:95" || { echo "FAIL: spaced"; fail=1; }
+lib spaced "20000" | grep -qx "20000" || { echo "FAIL: spaced single"; fail=1; }
+lib spaced "a*,b" | grep -qx "a\* b" || { echo "FAIL: spaced globbed"; fail=1; }
+# An unreadable maximum: hispeed_freq goes last.
+setup
+rm "$pol/scaling_max_freq"
+OMG_SYSFS="$root/sys" lib hispeed_before_max 1008000 && { echo "FAIL: unreadable max should put hispeed last"; fail=1; }
+rm -rf "$root"
+# If hispeed_freq cannot be raised, scaling_max_freq is not raised above it.
+if [ "$(id -u)" -ne 0 ]; then
+    setup
+    echo 800000 > "$pol/scaling_max_freq"
+    echo 800000 > "$gov/hispeed_freq"
+    chmod a-w "$gov/hispeed_freq"
+    out=$(run stock 2>&1); status=$?
+    check "hispeed not raised exit" 1 "$status"
+    check "hispeed not raised max" 800000 "$(val devices/system/cpu/cpu0/cpufreq/scaling_max_freq)"
+    case "$out" in *"left scaling_max_freq alone"*) ;; *) echo "FAIL: kept max not reported: $out"; fail=1 ;; esac
+    rm -rf "$root"
+fi
 # If scaling_max_freq cannot be lowered, hispeed_freq is not lowered below it either.
 if [ "$(id -u)" -ne 0 ]; then
     setup

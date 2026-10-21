@@ -85,10 +85,30 @@ status() {
 # Keep hispeed_freq at or above scaling_max_freq at every step, so that no target is ever
 # above it (see profile_values): a new hispeed_freq at or above the current scaling_max_freq
 # is written before scaling_max_freq, a lower one after it.
+# An unreadable maximum counts as higher, so hispeed_freq is then written last.
 hispeed_before_max() {  # new_hispeed
     cur_max=$(cat "$POLICY/scaling_max_freq" 2>/dev/null)
-    case "$cur_max" in ''|*[!0-9]*) cur_max=0 ;; esac
+    case "$cur_max" in ''|*[!0-9]*) return 1 ;; esac
     [ "$1" -ge "$cur_max" ]
+}
+
+# hispeed_freq now reads at least new_max (unreadable: no).
+hispeed_covers() {  # new_max
+    cur_hispeed=$(cat "$GOV/hispeed_freq" 2>/dev/null)
+    case "$cur_hispeed" in ''|*[!0-9]*) return 1 ;; esac
+    [ "$cur_hispeed" -ge "$1" ]
+}
+
+# Commas to spaces, in the shell itself: Android 4.4's toolbox has no tr.
+spaced() {  # value
+    old_ifs=$IFS
+    IFS=,
+    set -f
+    # shellcheck disable=SC2086 # splitting at the commas is intended
+    set -- $1
+    set +f
+    IFS=$old_ifs
+    echo "$*"
 }
 
 # Tests source the functions only.
@@ -122,8 +142,17 @@ interactive=no
 [ "$(cat "$POLICY/scaling_governor" 2>/dev/null)" = interactive ] && interactive=yes
 hispeed_first=no
 [ "$interactive" = yes ] && hispeed_before_max "$2" && hispeed_first=yes
-[ "$hispeed_first" = yes ] && put "$GOV/hispeed_freq" "$2"
-put "$POLICY/scaling_max_freq" "$1"
+if [ "$hispeed_first" = yes ]; then
+    put "$GOV/hispeed_freq" "$2"
+    if hispeed_covers "$1"; then
+        put "$POLICY/scaling_max_freq" "$1"
+    else
+        echo "omg-tune: left scaling_max_freq alone: hispeed_freq is below $1" >&2
+        failed=1
+    fi
+else
+    put "$POLICY/scaling_max_freq" "$1"
+fi
 if [ "$interactive" = yes ]; then
     if [ "$hispeed_first" = no ]; then
         if hispeed_before_max "$2"; then
@@ -134,8 +163,8 @@ if [ "$interactive" = yes ]; then
         fi
     fi
     put "$GOV/go_hispeed_load" "$3"
-    put "$GOV/target_loads" "$(echo "$4" | tr , " ")"
-    put "$GOV/above_hispeed_delay" "$(echo "$5" | tr , " ")"
+    put "$GOV/target_loads" "$(spaced "$4")"
+    put "$GOV/above_hispeed_delay" "$(spaced "$5")"
     put "$GOV/min_sample_time" "$6"
     put "$GOV/timer_rate" "$7"
 else
