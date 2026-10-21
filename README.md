@@ -4,6 +4,8 @@ Kernel builds for Google Glass Explorer Edition on its final firmware, XE24 (TI 
 
 ## Status
 
+Phase 5: a `tuned-stable` variant, the `tuned` build on Linux 3.4.113, the final linux-3.4.y release (1450 upstream fixes merged into Google's source). Not run on hardware. See [`docs/stable-merge.md`](docs/stable-merge.md).
+
 Phase 4: lean tuned build (no lock debugging or runtime tracers; per-frequency above_hispeed_delay, io_is_busy). Not measured on hardware. See [`docs/tuning.md`](docs/tuning.md).
 
 Phase 3: GPU module built from source (DDK 1.9@2166536), importing the same kernel symbols with the same CRCs as the stock module (not yet run on hardware). See [`docs/gpu-module.md`](docs/gpu-module.md).
@@ -18,12 +20,15 @@ Google publishes the Glass kernel in [`kernel/omap`](https://android.googlesourc
 
 The kernel tree is not vendored. `scripts/fetch-source.sh` makes a shallow clone of the pinned commit (`scripts/source.env`) into `src/`. It runs in the container. `src/` is managed by the scripts: local edits there are discarded on each build.
 
+The `tuned-stable` variant builds instead from [`OpenMyGlass/kernel-omap`](https://github.com/OpenMyGlass/kernel-omap), which holds the merge of linux-3.4.y `v3.4.113` into that commit (`STABLE_*` in `scripts/source.env`). `scripts/check-stable-merge.sh` re-creates the merge from its inputs and checks it against the pin (see [`docs/stable-merge.md`](docs/stable-merge.md)).
+
 ## Building
 
 The 3.4 kernel needs an old GCC, so builds run in a pinned container (`Dockerfile`: Ubuntu 14.04, `gcc-arm-linux-gnueabi` 4.7 (Linaro 4.7.3), which builds the tree without patches):
 
 ```sh
 scripts/build-in-container.sh    # docker or podman: fetches src/ and builds
+VARIANT=tuned-stable scripts/build-in-container.sh    # or tuned; the default is stock
 ```
 
 The kernel tree is kept in a container volume (`glass-kernel-src`) because Linux 3.4 has paths that differ only by case, which a default macOS volume cannot hold.

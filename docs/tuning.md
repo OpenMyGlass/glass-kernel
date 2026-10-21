@@ -96,6 +96,10 @@ The two new knobs, under `/sys/devices/system/cpu/cpufreq/interactive/`:
 
 Size, from the CI artifacts of run 39650912927 (before the patches): the `tuned` `zImage` is 4,839,160 bytes, against 5,075,816 for `stock` (236,656 bytes, 4.7%, smaller).
 
+### `tuned-stable`
+
+`VARIANT=tuned-stable` is the same config and patches on Linux 3.4.113 instead of 3.4.94: Google's source with the 1450 later linux-3.4.y fixes merged in. Everything in this file applies to it unchanged; stable changes no thermal, OPP or governor code. See [`stable-merge.md`](stable-merge.md). In the measurement plan, it is a third build to compare with the `stock` profile, after `tuned`.
+
 ## Deliberately not done
 - **Undervolting:** SmartReflex 1.5 already trims voltages, and OMAP4 kernels that undervolted saw random reboots for little gain.
 - **Overclocking, or enabling the 1.2 GHz point:** more heat, the opposite of the goal.
