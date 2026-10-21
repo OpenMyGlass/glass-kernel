@@ -8,7 +8,7 @@ The `tuned-stable` variant builds Google's Glass kernel merged with the last lin
 |---|---|
 | Ours (first parent) | `kernel/omap` `glass-omap-xrx13b` @ `989d925476700c0d07a75008b37725cbc558f862` (3.4.94) |
 | Theirs (second parent) | tag `v3.4.113` (PGP-signed by Zefan Li) @ `8d1988f838a95e836342b505398d38b223181f17`, from `git.kernel.org/…/stable/linux.git` |
-| Merge base | `v3.4.94` @ `95f3bb9bd690350d1ba58cb1541a26ce2db209e8`, which Google merged in `4e256f07ce` ("Merge tag 'v3.4.94' into kernel") |
+| Merge base | `v3.4.94` @ `95f3bb9bd690350d1ba58cb1541a26ce2db209e8`, which Google merged in `4e256f0731` ("Merge tag 'v3.4.94' into kernel"). Erratum: the merge commit's message abbreviates this as `4e256f07ce`, which is wrong after the eighth digit; the branch is frozen, so the message stays |
 | Upstream commits | 1450 (3.4.95 to 3.4.113, 19 releases), none of them merges |
 | Result | [`OpenMyGlass/kernel-omap`](https://github.com/OpenMyGlass/kernel-omap) branch `glass-omap-xrx13b-stable-3.4.113` @ `b6ea8564759ba36c96db4a07e2f5647c890c3f86`, tree `c8dc0475b38a50e1965ce3bc280225356f9a404f` |
 | Change against Google's tree | 1178 files, +14,668 / −7,017 lines |
@@ -49,8 +49,8 @@ No conflict touches Glass-specific code, and stable changes none of these files:
 ## The clean merges
 
 A clean merge can still be wrong when Google already carries a fix that stable also brings, because it could end up applied twice. Two checks:
-- **The same change.** Google's side and stable both change 66 files. For each of the 61 that merged cleanly, the lines the merge changes in Google's file are exactly the lines stable changes in v3.4.94 (compared as sorted sets of `+`/`−` lines). The one exception is `fs/ext4/mballoc.c`, below.
-- **Fixes already in Google's tree.** Google's 4,625 non-merge commits that are not in v3.4.94 were matched against the 1450 stable commits, by upstream SHA (`cherry picked from commit …` against `commit … upstream`) and by subject. One is in both: b5b60778 "ext4: fix wrong assert in ext4_mb_normalize_request()" (Google's d20798d1, stable's 2dbc65d6). It is the same one-line change on both sides, so git merges it once.
+- **The same change.** Google's side and stable both change 67 files, and git merges 62 of them cleanly. In git's result, for 61 of those 62, the lines the merge changes in Google's file are exactly the lines stable changes in v3.4.94 (compared as sorted sets of `+`/`−` lines). The one exception is `fs/ext4/mballoc.c`, below. Two of the 61, `drivers/usb/dwc3/core.h` and `gadget.h`, are then set back to Google's version by the dwc3 decision above.
+- **Fixes already in Google's tree.** Google's 4,625 non-merge commits that are not in v3.4.94 (full history, from a treeless clone: `git fetch --filter=tree:0 https://android.googlesource.com/kernel/omap refs/heads/glass-omap-xrx13b`, then `git log --no-merges glass-omap-xrx13b ^95f3bb9`) were matched against the 1450 stable commits, by upstream SHA (`cherry picked from commit …` against `commit … upstream`) and by subject. One is in both: b5b60778 "ext4: fix wrong assert in ext4_mb_normalize_request()" (Google's d20798d1, stable's 2dbc65d6). It is the same one-line change on both sides, so git merges it once.
 
 ## Upstream changes in power, thermal and charging code
 
@@ -70,6 +70,9 @@ No stable commit changes a voltage, OPP, thermal limit, charger current or fuel-
 | 5dc1c885 PM / sleep: Fix request_firmware() error at resume | firmware loading right after resume | built |
 | dd7ad96c watchdog: omap: assert the counter being stopped before reprogramming | `omap_wdt_open()` stops the watchdog before setting it up | built (`OMAP_WATCHDOG=y`); the timeout value is unchanged |
 | ba8f03aa ARM: OMAP2+: Fix parser-bug in platform muxing code | a `mode0.mode` pin name must match the mode0 name exactly, not as a prefix | built; **checked, no effect on notle**: none of the 1143 pin names used in `arch/arm/mach-omap2` resolves differently on OMAP4 (32 mode0 names are prefixes of others, such as `gpmc_ad1`/`gpmc_ad10`, but none of them is used ambiguously) |
+| 0629784c ARM: 8471/1: need to save/restore arm register(r11) when it is corrupted | `cpu_v7_do_suspend` in `arch/arm/mm/proc-v7.S` saves and restores r11 | built; OMAP4 runs it on every suspend and every deep cpuidle entry (`cpu_suspend()` in `omap-mpuss-lowpower.c`); register save only, no value changes |
+| a2ca02f1 freezer: Do not freeze tasks killed by OOM killer | a task with `TIF_MEMDIE` is not frozen | built; Android's lowmemorykiller sets `TIF_MEMDIE` on its victims, so they can now exit during suspend entry instead of blocking it |
+| 5624bb35, 3efcfa54, c2e9312c, b2e30785, 31a52644 | ARM core: abort handlers keep the exclusive monitors, NEON alignment fixup, `ELF_ET_DYN_BASE` overflow, Thumb IT state in signal handling | built; no power-related values |
 | 8c095d35, b81cc21d, f8cce9e3, 3f6d9b62, fbbb7208, 3f8f4ae4; alarmtimer e0650342, b114657d, 7ccf24be, 299e667e | timekeeping, NTP, hrtimer, nohz and alarm-timer fixes | built; alarm timers wake Android from suspend |
 
 The other upstream changes are in the core kernel (mm, scheduler, filesystems, networking, crypto, ALSA, USB, Bluetooth) and in drivers not built for notle.
@@ -101,4 +104,4 @@ From CI run 39671222156:
 | `tuned` (unchanged) | `a4f3215246c4fa96f3bec15fadadf3cd70d9ed0ed72d99c400d80118618c1041` | 4,840,000 | `69afa570c35808286acdb3d13e034c665eb3c7ea4105016914ff86bc33d4bb9c` | 402,532 |
 | `tuned-stable` | `b66e90d4f03859e43d531c323ba3d76b401290aec075362ddc2655ce70bbe938` | 4,844,888 | `b32408caef5eee58bee4c04db009a4f3e7eb6bbdae196f807fdcd53affcf506b` | 402,644 |
 
-`stock` and `tuned` are byte-identical to main (run 39657896376). `tuned-stable`'s `zImage` is 4,888 bytes larger than `tuned`'s.
+`stock` and `tuned` are byte-identical to main (run 39657896376). Repro run 39671227457 reports `identical` for `Image`, `vmlinux`, `zImage` and the module in all three variants. `tuned-stable`'s `zImage` is 4,888 bytes larger than `tuned`'s.

@@ -17,9 +17,16 @@ expected_conflicts="drivers/usb/dwc3/core.c drivers/usb/dwc3/ep0.c drivers/usb/d
 net/netfilter/xt_socket.c sound/usb/card.c"
 
 # A bare repository: no checkout, so the paths that differ only by case are no problem on macOS.
-rm -rf "$work"
+# Remove an old work directory only if this script made it.
+if [ -e "$work" ]; then
+    [ -f "$work/check-stable-merge" ] || { echo "error: $work exists and was not made by this script" >&2; exit 1; }
+    rm -rf "$work"
+fi
 git init -q --bare "$work"
-g() { git -C "$work" "$@"; }
+touch "$work/check-stable-merge"
+# Ignore the user's and the system's git config: merge.conflictStyle, for example, changes the
+# conflict markers that the resolutions patch expects.
+g() { GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git -c merge.conflictStyle=merge -C "$work" "$@"; }
 # Only history from 2014 on is needed: the merge base, v3.4.94, is from June 2014.
 # The ref names are part of the conflict markers the resolutions patch expects.
 g fetch -q --filter=blob:none --shallow-since=2014-04-01 "$REPO" \

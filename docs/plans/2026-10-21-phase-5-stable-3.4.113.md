@@ -27,7 +27,7 @@ Options considered:
 
 Why (a1):
 - **Reproducible.** The merge's inputs are pinned (Google's commit, the PGP-signed upstream tag, and the commit it points to) and its output is pinned by commit SHA. `check-stable-merge.sh` re-creates the tree from the inputs plus the resolutions patch, so anyone can check that nothing else was changed.
-- **Reviewable.** git merges only 5 files with conflicts. The 61 other files that both sides changed merge cleanly, and for each of them the change against Google's file is exactly stable's change (checked line by line, see `docs/stable-merge.md`). Review therefore comes down to the resolutions patch (2 files, 4 hunks), one dwc3 decision, and the list of upstream changes in power-related code.
+- **Reviewable.** git merges only 5 files with conflicts. The 62 other files that both sides changed merge cleanly, and for all but one of them the change against Google's file is exactly stable's change (checked line by line; the exception is a fix Google already had, see `docs/stable-merge.md`). Review therefore comes down to the resolutions patch (2 files, 2 hunks), one dwc3 decision, and the list of upstream changes in power-related code.
 - **Auditable.** Every conflict is listed with file, reason and kept side in `docs/stable-merge.md`. The prior work is used as an independent cross-check: both hand-resolved files are byte-identical to Unlegacy-Android's 3.4.113 merges.
 - **Small and fast for builds.** CI fetches one commit at depth 1, as it does for Google's source.
 
@@ -66,11 +66,11 @@ Why a new variant and not `tuned`:
 - Create (in `OpenMyGlass/kernel-omap`): branches `glass-omap-xrx13b` (mirror) and `glass-omap-xrx13b-stable-3.4.113` (merge).
 - Create: `stable-merge/v3.4.113-resolutions.patch`
 
-- [x] **Step 1: Fetch the inputs.** Partial, shallow clones are enough (history from 2014-04-01): Google's branch, `v3.4.113` from kernel.org stable. Check that the merge base is `v3.4.94` (95f3bb9), which Google merged in 4e256f07.
+- [x] **Step 1: Fetch the inputs.** Partial, shallow clones are enough (history from 2014-04-01): Google's branch, `v3.4.113` from kernel.org stable. Check that the merge base is `v3.4.94` (95f3bb9), which Google merged in 4e256f0731.
 - [x] **Step 2: Merge.** Run `git merge-tree --write-tree glass-omap-xrx13b v3.4.113`. Expected: a small conflict list. Resolve each conflict by keeping both sides' intent, and stop if a Glass-specific file (board-notle, duty-cycle thermal governor, interactive governor, notle-usb-mux, glasshub, ram_console) conflicts and its resolution is not certain.
   - Result: 5 conflicts (dwc3 ×3, `xt_socket.c`, `sound/usb/card.c`). Stable touches no Glass-specific file.
 - [x] **Step 3: Check the clean merges.** For every file both sides changed, compare stable's line changes with what the merge changes in Google's file, and list the stable commits that Google had already cherry-picked (matched by upstream SHA and by subject).
-  - Result: identical for all 61 cleanly merged files except `fs/ext4/mballoc.c`, where Google already had stable's one-line fix (b5b60778), so it is applied once.
+  - Result: identical for 61 of the 62 cleanly merged files; the exception is `fs/ext4/mballoc.c`, where Google already had stable's one-line fix (b5b60778), so it is applied once.
 - [x] **Step 4: List the upstream changes in power-related code** (regulator, cpufreq, power supply, thermal, mfd, mach-omap2, watchdog, PM core, timekeeping) and say for each whether it is built on notle and whether it changes a value.
 - [x] **Step 5: Cross-check** the resolutions against invisiblek's and Unlegacy-Android's merges.
 - [x] **Step 6: Create the repository and push.** `gh repo create OpenMyGlass/kernel-omap --public`. Push both branches from a full single-branch clone, then add the rulesets: `protect-main` (as in glass-kernel: no deletion, no force-push, changes by pull request) on the default branch, and `freeze-pinned-branches` (no deletion, no force-push, no update) on all branches.
@@ -85,22 +85,22 @@ Why a new variant and not `tuned`:
 - `VARIANT=tuned-stable scripts/build-in-container.sh` builds `out/zImage` and `out/pvrsrvkm_sgx540_120.ko` from `STABLE_COMMIT`, with `configs/tuned.config` and `patches/tuned/`.
 - `scripts/check-stable-merge.sh [workdir]` exits 0 only when `STABLE_COMMIT` is the documented merge.
 
-- [ ] **Step 1:** Write `variant.sh` and make `fetch-source.sh` and `build.sh` use it. For `stock` and `tuned`, the fetched commit, patches and config stay the same.
-- [ ] **Step 2:** Write `check-stable-merge.sh` and run it locally. Expected: `tree c8dc0475…: git's merge plus the documented resolutions`.
-- [ ] **Step 3:** Add `tuned-stable` to the build and repro matrices, and a `stable-merge` CI job that runs the check script.
-- [ ] **Step 4:** `shellcheck -s sh scripts/*.sh`. Expected: no output.
-- [ ] **Step 5:** Commit with the message `Add the tuned-stable variant, on linux-3.4.y 3.4.113`.
+- [x] **Step 1:** Write `variant.sh` and make `fetch-source.sh` and `build.sh` use it. For `stock` and `tuned`, the fetched commit, patches and config stay the same.
+- [x] **Step 2:** Write `check-stable-merge.sh` and run it locally. Expected: `tree c8dc0475…: git's merge plus the documented resolutions`.
+- [x] **Step 3:** Add `tuned-stable` to the build and repro matrices, and a `stable-merge` CI job that runs the check script.
+- [x] **Step 4:** `shellcheck -s sh scripts/*.sh`. Expected: no output.
+- [x] **Step 5:** Commit with the message `Add the tuned-stable variant, on linux-3.4.y 3.4.113`.
 
 ### Task 3: Verify through CI
 
-- [ ] **Step 1:** Push branch `stable-3.4.113` and run `gh workflow run build.yml --ref stable-3.4.113` and `gh workflow run repro.yml --ref stable-3.4.113`.
+- [x] **Step 1:** Push branch `stable-3.4.113` and run `gh workflow run build.yml --ref stable-3.4.113` and `gh workflow run repro.yml --ref stable-3.4.113`.
   - Expected: all jobs pass, and the `tuned-stable` log shows `applying patches/tuned/…` and no Kconfig error.
   - Expected: the `stock` and `tuned` SHA256SUMS lines are identical to those of main run 39657896376.
   - Expected: repro reports `identical` for all four files in all three variants.
   - Expected: `stable-merge` passes.
-- [ ] **Step 2:** Download the `kernel-tuned` and `kernel-tuned-stable` artifacts. Run `scripts/compare_ko.py` with tuned's module against tuned-stable's, and the stock XE24 module (owner's copy, not in the repo) against tuned-stable's. Record every CRC difference and the symbols involved.
+- [x] **Step 2:** Download the `kernel-tuned` and `kernel-tuned-stable` artifacts. Run `scripts/compare_ko.py` with tuned's module against tuned-stable's, and the stock XE24 module (owner's copy, not in the repo) against tuned-stable's. Record every CRC difference and the symbols involved.
   - If a symbol the module imports is gone, or the module does not link: stop and report.
-- [ ] **Step 3:** Record the `tuned-stable` hashes and sizes.
+- [x] **Step 3:** Record the `tuned-stable` hashes and sizes.
 
 ### Task 4: Docs
 
@@ -108,7 +108,7 @@ Why a new variant and not `tuned`:
 - Create: `docs/stable-merge.md`
 - Modify: `README.md` (Status, Source), `docs/hardware-checks.md`, `docs/gpu-module.md`, `docs/tuning.md`
 
-- [ ] **Step 1:** In `docs/stable-merge.md`, record: the approach, the inputs, every conflict (file, why, which side kept), the clean-merge check, the Glass-specific files (none conflicted), upstream changes in power-related code, the PVR CRC differences, and how to re-check.
-- [ ] **Step 2:** Add the `tuned-stable` boot checks to `docs/hardware-checks.md`, marked as not run.
-- [ ] **Step 3:** Commit with the message `Document the 3.4.113 stable merge`.
-- [ ] **Step 4:** Have at least one independent review of the full diff (this repository and the merge itself). Fix the findings, open the pull request, and merge it with a merge commit once CI is green.
+- [x] **Step 1:** In `docs/stable-merge.md`, record: the approach, the inputs, every conflict (file, why, which side kept), the clean-merge check, the Glass-specific files (none conflicted), upstream changes in power-related code, the PVR CRC differences, and how to re-check.
+- [x] **Step 2:** Add the `tuned-stable` boot checks to `docs/hardware-checks.md`, marked as not run.
+- [x] **Step 3:** Commit with the message `Document the 3.4.113 stable merge`.
+- [x] **Step 4:** Have at least one independent review of the full diff (this repository and the merge itself). Fix the findings, open the pull request, and merge it with a merge commit once CI is green.
