@@ -158,7 +158,7 @@ if [ "$interactive" = yes ]; then
         if hispeed_before_max "$2"; then
             put "$GOV/hispeed_freq" "$2"
         else
-            echo "omg-tune: left hispeed_freq alone: scaling_max_freq is still above $2" >&2
+            echo "omg-tune: left hispeed_freq alone: scaling_max_freq is above $2 or unreadable" >&2
             failed=1
         fi
     fi
