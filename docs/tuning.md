@@ -109,7 +109,7 @@ How it matches the touchpad: Glass's touchpad is a Synaptics TM2240 (`rmi_i2c` a
 
 Limits: the boost never goes above `hispeed_freq`. Whatever `hispeed_freq` is, `omap_target()` picks only table frequencies within `scaling_min_freq`–`scaling_max_freq`, and `omap_cpufreq_scale()` clamps to the thermal limit, so it cannot reach a frequency that the governor could not already select, and nothing above the 1008 MHz OPP. With the kernel default `hispeed_freq` (the policy maximum, 1008 MHz, also what the `stock` profile writes), a touch goes to 1008 MHz when the thermal table allows; `balanced` and `cool` make it 600 MHz.
 
-Known upstream limits, kept as they were: the handler has a single work item to open devices, so if two matching devices connect at the same moment (for example a USB HID touchscreen already plugged in when the governor starts), only the second is opened, and unplugging the first later underflows its open count; a failed `input_open_device()` leaks the handle. On Glass only the touchpad matches, and it is never removed.
+Known upstream limits, kept as they were: the handler has a single work item to open devices, so if two matching devices connect at the same moment (for example a USB HID touchscreen already plugged in when the governor starts), only the second is opened, and unplugging the first later underflows its open count; a device removed before its open work has run leaves the work with a freed handle; a failed `input_open_device()` leaks the handle. On Glass only the touchpad matches, and it is never removed.
 
 Build results, from CI run 39683348523 (repro run 39683348561: `identical` for `Image`, `vmlinux`, `zImage` and the module in all three variants):
 
