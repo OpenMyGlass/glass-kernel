@@ -18,12 +18,15 @@ QUEUE=$SYS/block/mmcblk0/queue
 failed=0
 
 # profile: max hispeed go_hispeed_load target_loads above_hispeed_delay min_sample_time timer_rate scheduler
-# A comma stands for a space inside one value (above_hispeed_delay: "base freq:delay").
+# A comma stands for a space inside one value (target_loads, above_hispeed_delay: "base freq:value").
+# hispeed equals max in every profile: on Glass kernels hispeed_freq is also the governor's
+# ceiling, and on kernels without patches/tuned/0009 a target above it drops the CPU to its
+# lowest speed (docs/tuning.md).
 profile_values() {
     case "$1" in
         stock)    echo "1008000 1008000 99 90 20000 80000 20000 cfq" ;;
-        balanced) echo "1008000 600000 90 85 40000,800000:60000 60000 20000 deadline" ;;
-        cool)     echo "800000 600000 95 85 60000,800000:80000 60000 30000 deadline" ;;
+        balanced) echo "1008000 1008000 99 90,800000:95 20000 60000 20000 deadline" ;;
+        cool)     echo "800000 800000 99 90 20000 60000 30000 deadline" ;;
         *)        return 1 ;;
     esac
 }
@@ -79,6 +82,35 @@ status() {
     return 0
 }
 
+# Keep hispeed_freq at or above scaling_max_freq at every step, so that no target is ever
+# above it (see profile_values): a new hispeed_freq at or above the current scaling_max_freq
+# is written before scaling_max_freq, a lower one after it.
+# An unreadable maximum counts as higher, so hispeed_freq is then written last.
+hispeed_before_max() {  # new_hispeed
+    cur_max=$(cat "$POLICY/scaling_max_freq" 2>/dev/null)
+    case "$cur_max" in ''|*[!0-9]*) return 1 ;; esac
+    [ "$1" -ge "$cur_max" ]
+}
+
+# hispeed_freq now reads at least new_max (unreadable: no).
+hispeed_covers() {  # new_max
+    cur_hispeed=$(cat "$GOV/hispeed_freq" 2>/dev/null)
+    case "$cur_hispeed" in ''|*[!0-9]*) return 1 ;; esac
+    [ "$cur_hispeed" -ge "$1" ]
+}
+
+# Commas to spaces, in the shell itself: Android 4.4's toolbox has no tr.
+spaced() {  # value
+    old_ifs=$IFS
+    IFS=,
+    set -f
+    # shellcheck disable=SC2086 # splitting at the commas is intended
+    set -- $1
+    set +f
+    IFS=$old_ifs
+    echo "$*"
+}
+
 # Tests source the functions only.
 [ -n "${OMG_LIB:-}" ] && return 0
 
@@ -106,12 +138,33 @@ esac
 
 # shellcheck disable=SC2046 # word splitting into the positional values is intended
 set -- $(profile_values "$1")
-put "$POLICY/scaling_max_freq" "$1"
-if [ "$(cat "$POLICY/scaling_governor" 2>/dev/null)" = interactive ]; then
+interactive=no
+[ "$(cat "$POLICY/scaling_governor" 2>/dev/null)" = interactive ] && interactive=yes
+hispeed_first=no
+[ "$interactive" = yes ] && hispeed_before_max "$2" && hispeed_first=yes
+if [ "$hispeed_first" = yes ]; then
     put "$GOV/hispeed_freq" "$2"
+    if hispeed_covers "$1"; then
+        put "$POLICY/scaling_max_freq" "$1"
+    else
+        echo "omg-tune: left scaling_max_freq alone: hispeed_freq is below $1" >&2
+        failed=1
+    fi
+else
+    put "$POLICY/scaling_max_freq" "$1"
+fi
+if [ "$interactive" = yes ]; then
+    if [ "$hispeed_first" = no ]; then
+        if hispeed_before_max "$2"; then
+            put "$GOV/hispeed_freq" "$2"
+        else
+            echo "omg-tune: left hispeed_freq alone: scaling_max_freq is above $2 or unreadable" >&2
+            failed=1
+        fi
+    fi
     put "$GOV/go_hispeed_load" "$3"
-    put "$GOV/target_loads" "$4"
-    put "$GOV/above_hispeed_delay" "$(echo "$5" | tr , " ")"
+    put "$GOV/target_loads" "$(spaced "$4")"
+    put "$GOV/above_hispeed_delay" "$(spaced "$5")"
     put "$GOV/min_sample_time" "$6"
     put "$GOV/timer_rate" "$7"
 else

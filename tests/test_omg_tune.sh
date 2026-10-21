@@ -37,9 +37,9 @@ lib matches "noop deadline [cfq] " deadline && { echo "FAIL: inactive scheduler 
 setup
 run cool >/dev/null 2>&1; check "cool exit" 0 $?
 check "cool max" 800000 "$(val devices/system/cpu/cpu0/cpufreq/scaling_max_freq)"
-check "cool hispeed" 600000 "$(val devices/system/cpu/cpufreq/interactive/hispeed_freq)"
-check "cool go_hispeed_load" 95 "$(val devices/system/cpu/cpufreq/interactive/go_hispeed_load)"
-check "cool above_hispeed_delay" "60000 800000:80000" "$(val devices/system/cpu/cpufreq/interactive/above_hispeed_delay)"
+check "cool hispeed" 800000 "$(val devices/system/cpu/cpufreq/interactive/hispeed_freq)"
+check "cool go_hispeed_load" 99 "$(val devices/system/cpu/cpufreq/interactive/go_hispeed_load)"
+check "cool above_hispeed_delay" 20000 "$(val devices/system/cpu/cpufreq/interactive/above_hispeed_delay)"
 check "cool timer_rate" 30000 "$(val devices/system/cpu/cpufreq/interactive/timer_rate)"
 check "cool scheduler" deadline "$(val block/mmcblk0/queue/scheduler)"
 
@@ -51,39 +51,39 @@ check "stock scheduler" cfq "$(val block/mmcblk0/queue/scheduler)"
 
 run balanced >/dev/null 2>&1
 check "balanced max" 1008000 "$(val devices/system/cpu/cpu0/cpufreq/scaling_max_freq)"
-check "balanced hispeed" 600000 "$(val devices/system/cpu/cpufreq/interactive/hispeed_freq)"
-check "balanced target_loads" 85 "$(val devices/system/cpu/cpufreq/interactive/target_loads)"
-check "balanced above_hispeed_delay" "40000 800000:60000" "$(val devices/system/cpu/cpufreq/interactive/above_hispeed_delay)"
+check "balanced hispeed" 1008000 "$(val devices/system/cpu/cpufreq/interactive/hispeed_freq)"
+check "balanced target_loads" "90 800000:95" "$(val devices/system/cpu/cpufreq/interactive/target_loads)"
+check "balanced above_hispeed_delay" 20000 "$(val devices/system/cpu/cpufreq/interactive/above_hispeed_delay)"
 rm -rf "$root"
 
 # A kernel that parses only the first number reads back a single value: that is accepted
 # quietly (exit 0, nothing printed). OMG_TEST_FIRST_TOKEN_ONLY is the script's test-only hook
 # that makes the write behave like such a kernel.
-test_fallback_single_delay() {
+test_fallback_single_value() {
     setup
     out=$(OMG_TEST_FIRST_TOKEN_ONLY=1 run balanced 2>&1); status=$?
     check "fallback exit" 0 "$status"
     check "fallback output" "" "$out"
-    check "fallback delay" 40000 "$(val devices/system/cpu/cpufreq/interactive/above_hispeed_delay)"
+    check "fallback target_loads" 90 "$(val devices/system/cpu/cpufreq/interactive/target_loads)"
     rm -rf "$root"
     # If even the single value does not read back, it is still a failure.
     setup
-    chmod a-w "$gov/above_hispeed_delay"
+    chmod a-w "$gov/target_loads"
     out=$(run balanced 2>&1); status=$?
     if [ "$(id -u)" -ne 0 ]; then
-        check "unwritable delay exit" 1 "$status"
-        case "$out" in *above_hispeed_delay*) ;; *) echo "FAIL: unwritable delay not reported"; fail=1 ;; esac
+        check "unwritable target_loads exit" 1 "$status"
+        case "$out" in *target_loads*) ;; *) echo "FAIL: unwritable target_loads not reported"; fail=1 ;; esac
     fi
     rm -rf "$root"
     setup
-    rm "$gov/above_hispeed_delay"
-    ln -s /dev/null "$gov/above_hispeed_delay"
+    rm "$gov/target_loads"
+    ln -s /dev/null "$gov/target_loads"
     out=$(run balanced 2>&1); status=$?
-    check "unreadable-back delay exit" 1 "$status"
-    case "$out" in *above_hispeed_delay*) ;; *) echo "FAIL: delay mismatch not reported"; fail=1 ;; esac
+    check "unreadable-back target_loads exit" 1 "$status"
+    case "$out" in *target_loads*) ;; *) echo "FAIL: target_loads mismatch not reported"; fail=1 ;; esac
     rm -rf "$root"
 }
-test_fallback_single_delay
+test_fallback_single_value
 
 # status lists io_is_busy and above_hispeed_delay when present, and says nothing of io_is_busy otherwise.
 setup
@@ -129,6 +129,50 @@ test_input_boost() {
     rm -rf "$root"
 }
 test_input_boost
+
+# hispeed_freq is never left below scaling_max_freq while switching profiles: it is written
+# first when it is at or above the current maximum, last otherwise.
+setup
+OMG_SYSFS="$root/sys" lib hispeed_before_max 800000 && { echo "FAIL: lower hispeed should go after max"; fail=1; }
+OMG_SYSFS="$root/sys" lib hispeed_before_max 1008000 || { echo "FAIL: equal hispeed should go first"; fail=1; }
+echo 800000 > "$pol/scaling_max_freq"
+echo 800000 > "$gov/hispeed_freq"
+OMG_SYSFS="$root/sys" lib hispeed_before_max 1008000 || { echo "FAIL: higher hispeed should go first"; fail=1; }
+run stock >/dev/null 2>&1
+check "cool to stock max" 1008000 "$(val devices/system/cpu/cpu0/cpufreq/scaling_max_freq)"
+check "cool to stock hispeed" 1008000 "$(val devices/system/cpu/cpufreq/interactive/hispeed_freq)"
+rm -rf "$root"
+lib spaced "90,800000:95" | grep -qx "90 800000:95" || { echo "FAIL: spaced"; fail=1; }
+lib spaced "20000" | grep -qx "20000" || { echo "FAIL: spaced single"; fail=1; }
+lib spaced "a*,b" | grep -qx "a\* b" || { echo "FAIL: spaced globbed"; fail=1; }
+# An unreadable maximum: hispeed_freq goes last.
+setup
+rm "$pol/scaling_max_freq"
+OMG_SYSFS="$root/sys" lib hispeed_before_max 1008000 && { echo "FAIL: unreadable max should put hispeed last"; fail=1; }
+rm -rf "$root"
+# If hispeed_freq cannot be raised, scaling_max_freq is not raised above it.
+if [ "$(id -u)" -ne 0 ]; then
+    setup
+    echo 800000 > "$pol/scaling_max_freq"
+    echo 800000 > "$gov/hispeed_freq"
+    chmod a-w "$gov/hispeed_freq"
+    out=$(run stock 2>&1); status=$?
+    check "hispeed not raised exit" 1 "$status"
+    check "hispeed not raised max" 800000 "$(val devices/system/cpu/cpu0/cpufreq/scaling_max_freq)"
+    case "$out" in *"left scaling_max_freq alone"*) ;; *) echo "FAIL: kept max not reported: $out"; fail=1 ;; esac
+    rm -rf "$root"
+fi
+# If scaling_max_freq cannot be lowered, hispeed_freq is not lowered below it either.
+if [ "$(id -u)" -ne 0 ]; then
+    setup
+    chmod a-w "$pol/scaling_max_freq"
+    out=$(run cool 2>&1); status=$?
+    check "max not lowered exit" 1 "$status"
+    check "max not lowered hispeed" 1008000 "$(val devices/system/cpu/cpufreq/interactive/hispeed_freq)"
+    case "$out" in *"left hispeed_freq alone"*) ;; *) echo "FAIL: kept hispeed not reported: $out"; fail=1 ;; esac
+    check "max not lowered, rest applied" 60000 "$(val devices/system/cpu/cpufreq/interactive/min_sample_time)"
+    rm -rf "$root"
+fi
 
 # Missing tunables are skipped, the rest is still applied, and the exit status reports it.
 setup
