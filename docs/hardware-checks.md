@@ -21,3 +21,24 @@ To test ours, the stock module must never be loaded:
    - (b) On the device: `adb shell cat /proc/modules` lists `pvrsrvkm_sgx540_120`.
 3. `adb shell dmesg`: there must be no `PVRSRV_ERROR_DDK_VERSION_MISMATCH` and no `BUILD_MISMATCH` after `pvrsrvinit` runs.
 4. Check that SurfaceFlinger starts (`adb shell ps | grep surfaceflinger`, and the display works).
+
+## Debugging a boot with a normal USB cable
+
+No extra hardware is needed: everything below uses the micro-USB cable and `fastboot`/`adb`.
+
+1. **The log of a failed boot, `/proc/last_kmsg`.** The kernel is built with `CONFIG_ANDROID_RAM_CONSOLE` (with `CONFIG_OMAP_RAM_CONSOLE`): its log is kept in a RAM area that survives a warm reset. After a test kernel hangs, panics or resets, boot the stock kernel and read `adb shell cat /proc/last_kmsg`. It holds the failed boot's log from its first line. First check on a known-good boot that the bootloader keeps that RAM across a warm reset: `adb reboot`, then `/proc/last_kmsg` must show the previous boot.
+2. **Live, once the system is up:** `adb shell dmesg` for the kernel and `adb logcat` for Android.
+3. **A USB serial port without an adapter.** The Android USB gadget has an `acm` function, which shows up on the host as `/dev/tty.usbmodem*` (macOS) or `/dev/ttyACM*` (Linux).
+   - On 3.4 it cannot be the kernel console.
+   - An init step in the test boot image's ramdisk can still copy `/proc/kmsg` to `/dev/ttyGS0`, or start a shell on it.
+   - Read it with `screen <port> 115200`.
+   - It works only once the USB gadget driver is up, so the first seconds of boot come from `last_kmsg`.
+4. **Mainline equivalents:** `ramoops` (pstore) with a RAM area reserved in the device tree, in place of `last_kmsg`, and a real kernel console over USB, `console=ttyGS0` (`CONFIG_U_SERIAL_CONSOLE`).
+
+Last resort, only if a kernel stops before any of the above can capture something:
+- **The connector can carry a UART.** Glass's micro-USB data lines go through an analog switch (`arch/arm/mach-omap2/notle-usb-mux.c`) with `usb`, `tty`, `audio` and `floating` modes.
+  - The kernel selects `tty` when no USB host is attached and `usb_mux.tty_priority=1` is on the kernel command line. The console is `console=ttyO2,115200n8`.
+  - This needs a special cable: D+/D− to a USB-serial adapter, ground, and **no VBUS**, because VBUS makes the kernel switch back to `usb`.
+  - The OMAP's UART runs at 1.8 V logic (unverified), so the adapter must be a 1.8 V one. Which line is TX is unknown: connect the adapter's RX first.
+  - The mux is switched only when its driver probes, so the earliest boot messages are not on the wire.
+- **Factory cable:** an ID-pin voltage above 4.2 V makes the kernel reboot into the bootloader, unless the command line has `androidboot.mode=factorycable`.
