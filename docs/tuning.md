@@ -51,10 +51,11 @@ adb shell sh /data/local/tmp/omg-tune.sh status
 
 ## The `tuned` build
 
-`VARIANT=tuned scripts/build-in-container.sh`, built by CI as the `kernel-tuned` artifact. It differs from stock only in `configs/tuned.config`:
+`VARIANT=tuned scripts/build-in-container.sh`, built by CI as the `kernel-tuned` artifact. It differs from stock in `configs/tuned.config` and in the patches under `patches/tuned/`, which only this variant applies:
 - the default I/O scheduler is deadline;
 - two debug-only statistics are off;
-- the debugging and tracing options below, which cost time at runtime, are off.
+- the debugging and tracing options below, which cost time at runtime, are off;
+- the interactive governor has two later AOSP features, backported with their upstream follow-up fixes (see below).
 
 | Option off | Runtime cost in stock |
 |---|---|
@@ -80,7 +81,18 @@ Debug options that stay on:
 - `FTRACE`, `TRACEPOINTS` and `EVENT_TRACING`, because Android's `atrace` and `systrace` use event tracing, which costs nothing while it is off;
 - `DEBUG_KERNEL` and `KALLSYMS`, which only gate other options and give readable oopses.
 
-Size, from the CI artifacts of run 39650912927: the `tuned` `zImage` is 4,839,160 bytes, against 5,075,816 for `stock` (236,656 bytes, 4.7%, smaller).
+### Interactive governor backports (`patches/tuned/`)
+
+- `0001`–`0004`: AOSP `kernel/common` android-3.4 (now `deprecated/android-3.4`) commits e43dde3b (per-frequency `above_hispeed_delay`), fbcad723 (`io_is_busy`), and their upstream fixes cad16844 (crash on a malformed write) and 2e745d35 (uninitialised spinlock).
+- `0005` (OpenMyGlass): `io_is_busy` defaults to 1.
+
+The two new knobs, under `/sys/devices/system/cpu/cpufreq/interactive/`:
+- `above_hispeed_delay` takes either one delay `D` or a list `D F:D …`, with the same syntax as `target_loads`. For example, `20000 1008000:80000` waits 20 ms above `hispeed_freq` and 80 ms at 1008 MHz and above. Stock XE24 kernels take only the single value.
+- `io_is_busy` (0 or 1). On this 3.4 kernel, `get_cpu_idle_time_us` leaves iowait out, so the stock governor counts iowait as busy. The tuned default `io_is_busy=1` matches stock. `0` counts iowait as idle (the upstream default); it is an option to measure, and may ramp up less during eMMC-heavy work.
+
+`above_hispeed_delay` and `target_loads` read back with a trailing space (`20000 `). The kernel rejects that string, so trim it before writing a saved value back.
+
+Size, from the CI artifacts of run 39650912927 (before the patches): the `tuned` `zImage` is 4,839,160 bytes, against 5,075,816 for `stock` (236,656 bytes, 4.7%, smaller).
 
 ## Deliberately not done
 - **Undervolting:** SmartReflex 1.5 already trims voltages, and OMAP4 kernels that undervolted saw random reboots for little gain.
