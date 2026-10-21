@@ -141,6 +141,16 @@ With `hispeed_freq` at the maximum (the kernel default), no target can be above 
 
 `0009` (OpenMyGlass) keeps the ceiling, since Google may have meant it (for example to limit heat), and counts a target above `hispeed_freq` as `hispeed_freq`. Every speed it requests is still at or below `hispeed_freq`, as before, so no frequency goes higher than the stock code allows; it only removes the drop to the lowest speed. The profiles do not rely on it: they keep `hispeed_freq` at the maximum, so they behave the same on every kernel.
 
+Build results with `0009`, from CI run 39688312370 (repro run 39688312384: `identical` for `Image`, `vmlinux`, `zImage` and the module in all three variants):
+
+| Variant | `zImage` SHA-256 | size | `pvrsrvkm_sgx540_120.ko` |
+|---|---|---|---|
+| `stock` (unchanged) | `5b744fef8f8688562e19b8311225f324037aad49901ed78ee6854529de15caa1` | 5,075,816 | `1ec003f3…` (unchanged) |
+| `tuned` | `74f976b9c4ad47afacd7c715c0ab6580184f1bea81a96d450b453aa8d4ce0dc1` | 4,839,984 | `69afa570…`, byte-identical to before |
+| `tuned-stable` | `c27e112e18b8224fe080d3413fe5afcca96aad08483edfb4368fd07cfa15cd13` | 4,846,056 | `b32408ca…`, byte-identical to before |
+
+The GPU modules are byte-identical to those of the input-boost build above, so their imported CRCs are unchanged.
+
 ### `tuned-stable`
 
 `VARIANT=tuned-stable` is the same config and patches on Linux 3.4.113 instead of 3.4.94: Google's source with the 1450 later linux-3.4.y fixes merged in. Everything in this file applies to it unchanged; stable changes no thermal, OPP or governor code. See [`stable-merge.md`](stable-merge.md). In the measurement plan, it is a third build to compare with the `stock` profile, after `tuned`.
