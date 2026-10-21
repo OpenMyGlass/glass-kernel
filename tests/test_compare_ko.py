@@ -99,6 +99,39 @@ class CompareKoTest(unittest.TestCase):
         self.assertTrue(any("only_stock" in x for x in d))
         self.assertTrue(any("shared_sym" in x for x in d))
 
+    def test_requires_vermagic(self):
+        bare = compare_ko.read_module(make_elf32({".text": b"x"}, []))
+        with self.assertRaises(compare_ko.ModuleError):
+            compare_ko.compare(bare, bare)
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "bare.o")
+            with open(p, "wb") as f:
+                f.write(make_elf32({".text": b"x"}, []))
+            self.assertEqual(compare_ko.main([p, p]), 2)
+
+    def test_parm_differences(self):
+        a = mod(VM_STOCK + "parm=foo:bar\0parmtype=foo:int\0")
+        b = mod(VM_STOCK + "parm=baz:qux\0parmtype=foo:int\0")
+        d = compare_ko.compare(a, b)
+        self.assertEqual(len(d), 2)
+        self.assertTrue(any("foo" in x for x in d))
+        self.assertTrue(any("baz" in x for x in d))
+
+    def test_main_exit_codes(self):
+        import tempfile
+        def w(d, name, vm):
+            p = os.path.join(d, name)
+            with open(p, "wb") as f:
+                f.write(make_elf32({".modinfo": vm.encode()}, []))
+            return p
+        with tempfile.TemporaryDirectory() as d:
+            a = w(d, "a.ko", VM_STOCK)
+            b = w(d, "b.ko", VM_BUILT)
+            c = w(d, "c.ko", "vermagic=3.4.94-x SMP mod_unload\0")
+            self.assertEqual(compare_ko.main([a, b]), 0)
+            self.assertEqual(compare_ko.main([a, c]), 1)
+
     def test_rejects_non_elf32(self):
         elf64 = b"\x7fELF" + bytes([2, 1, 1]) + b"\0" * 60
         for bad in (b"not an elf", elf64):

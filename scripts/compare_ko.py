@@ -96,6 +96,8 @@ def _vermagic(mod):
 def compare(stock, built):
     diffs = []
     sv, bv = _vermagic(stock), _vermagic(built)
+    if sv is None or bv is None:
+        raise ModuleError("no vermagic in .modinfo")
     if sv != bv:
         diffs.append("vermagic differs: stock %r, built %r" % (sv, bv))
     if stock["ddk"] != built["ddk"]:
@@ -132,7 +134,11 @@ def main(argv):
         except (OSError, ModuleError) as e:
             print("%s: %s" % (path, e), file=sys.stderr)
             return 2
-    diffs = compare(*mods)
+    try:
+        diffs = compare(*mods)
+    except ModuleError as e:
+        print(e, file=sys.stderr)
+        return 2
     for d in diffs:
         print(d)
     if not diffs:
