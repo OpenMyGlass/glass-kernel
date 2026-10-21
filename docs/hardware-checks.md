@@ -13,9 +13,11 @@ Only with the owner present. `fastboot boot` runs from RAM and writes nothing to
 
 XE24's `init.omap4430.rc` runs `insmod /system/lib/modules/pvrsrvkm_sgx540_120.ko` in `on fs` and then starts `service pvrsrvinit /vendor/bin/pvrsrvinit`. Because the kernel is built with `CONFIG_MODVERSIONS`, it ignores the `LOCALVERSION` part of vermagic and all 167 CRCs match, so the stock module would most likely load into our kernel. Booting without further steps would therefore test the stock module, not ours.
 
-To test ours:
+To test ours, the stock module must never be loaded:
 
-1. Put `out/pvrsrvkm_sgx540_120.ko` in the boot ramdisk (for example `/pvrsrvkm_sgx540_120.ko`) and load it with `insmod` from an init step that runs before `on fs`, for example `on early-fs`. The stock `insmod` in `on fs` then fails with `EEXIST`, which is harmless. Adding the `.ko` to the ramdisk is a follow-up in glass-rom; it is not done yet.
-2. Check that the loaded module is ours. On the host, `modinfo -F srcversion out/pvrsrvkm_sgx540_120.ko` and `modinfo -F srcversion <stock .ko>` give two values. On the device, `adb shell cat /sys/module/pvrsrvkm_sgx540_120/srcversion` must equal the one from our build and differ from the stock one. If the two host values turn out equal, use `adb shell dmesg | grep -n -e pvrsrvkm -e insmod` instead: the first successful load must come from the early-fs step and the later one from `on fs` must report `File exists`.
+1. The boot image we `fastboot boot` carries its own ramdisk, which contains `init.omap4430.rc`. In that ramdisk copy, change the `on fs` line `insmod /system/lib/modules/pvrsrvkm_sgx540_120.ko` to load our module from the ramdisk instead, for example `insmod /lib/modules/pvrsrvkm_sgx540_120.ko`, and put `out/pvrsrvkm_sgx540_120.ko` at that path in the ramdisk. Doing this in glass-rom is a follow-up; it is not done yet. Nothing is written to the device.
+2. Check that the module is ours:
+   - (a) On the host, before booting: the boot image's ramdisk `init.omap4430.rc` contains no `/system/lib/modules/pvrsrvkm` line (for example `grep -c /system/lib/modules/pvrsrvkm init.omap4430.rc` prints `0`).
+   - (b) On the device: `adb shell cat /proc/modules` lists `pvrsrvkm_sgx540_120`.
 3. `adb shell dmesg`: there must be no `PVRSRV_ERROR_DDK_VERSION_MISMATCH` and no `BUILD_MISMATCH` after `pvrsrvinit` runs.
 4. Check that SurfaceFlinger starts (`adb shell ps | grep surfaceflinger`, and the display works).
