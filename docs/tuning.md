@@ -38,7 +38,7 @@ So above about 35 °C, which is normal when Glass is worn, the CPU is already li
 | eMMC I/O scheduler | cfq | deadline | deadline |
 
 - **balanced** keeps bursts up to 1008 MHz, but goes to 600 MHz first instead of straight to the maximum.
-- `above_hispeed_delay` takes a per-frequency list on the `tuned` build (see the backports below): the first value applies below 800 MHz, the second at 800 MHz and above. On a kernel without per-frequency support, the profile writes only the first value.
+- `above_hispeed_delay` takes a per-frequency list on the `tuned` build (see the backports below): the first value applies from `hispeed_freq` (600 MHz in these profiles) up to the next listed step, the second at 800 MHz and above. In `cool` (max 800 MHz), 800 MHz is the top step, so the `800000:80000` entry never applies and only `60000` matters. On a kernel without per-frequency support, the profile writes only the first value.
 - The profiles do not set `io_is_busy`; `status` shows it when present.
 - **cool** never uses the 1.388 V NITRO point. It mostly differs from stock when Glass is cool, for example right after waking up.
 
@@ -89,7 +89,7 @@ Debug options that stay on:
 - `0005` (OpenMyGlass): `io_is_busy` defaults to 1.
 
 The two new knobs, under `/sys/devices/system/cpu/cpufreq/interactive/`:
-- `above_hispeed_delay` takes either one delay `D` or a list `D F:D …`, with the same syntax as `target_loads`. For example, `20000 1008000:80000` waits 20 ms above `hispeed_freq` and 80 ms at 1008 MHz and above. Stock XE24 kernels take only the single value.
+- `above_hispeed_delay` takes either one delay `D` or a list `D F:D …`, with the same syntax as `target_loads`. For example, `20000 800000:80000` waits 20 ms below 800 MHz and 80 ms at 800 MHz before going higher. Stock XE24 kernels take only the single value.
 - `io_is_busy` (0 or 1). On this 3.4 kernel, `get_cpu_idle_time_us` leaves iowait out, so the stock governor counts iowait as busy. The tuned default `io_is_busy=1` matches stock. `0` counts iowait as idle (the upstream default); it is an option to measure, and may ramp up less during eMMC-heavy work.
 
 `above_hispeed_delay` and `target_loads` read back with a trailing space (`20000 `). The kernel rejects that string, so trim it before writing a saved value back.

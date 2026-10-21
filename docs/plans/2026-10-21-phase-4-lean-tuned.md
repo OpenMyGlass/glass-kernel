@@ -62,6 +62,7 @@
 - Produces, on the `tuned` kernel:
   - `/sys/devices/system/cpu/cpufreq/interactive/above_hispeed_delay` accepts and prints `D` or `D F:D …` (per-frequency, the same syntax as `target_loads`);
   - `/sys/devices/system/cpu/cpufreq/interactive/io_is_busy` (0 or 1, default 0) exists.
+  - *Amendment (during execution):* by ruling, patch 0005 sets the default to 1 to keep the stock accounting; 0 remains an option to measure.
 
 - [ ] **Step 1: Find the upstream commits.** In AOSP `kernel/common` (`android-3.4`, else `android-3.10`), find the commits that add:
   - (a) per-frequency `above_hispeed_delay` (Todd Poynor, "cpufreq: interactive: allow arbitrary speed / delay mappings for above_hispeed_delay" or similar);
@@ -97,7 +98,7 @@
   - `balanced` writes `40000 800000:60000` and `cool` writes `60000 800000:80000`. Both profiles keep the CPU at or below 800 MHz longer before NITRO.
   - When the read-back is not the multi-value string, write the single first value and accept it.
   - `status` lists `io_is_busy` when it exists.
-  - Profiles do not set `io_is_busy`: it is left at the kernel default (0) until it is measured.
+  - Profiles do not set `io_is_busy`: it is left at the kernel default (0) until it is measured. *(Amended: the kernel default is 1 via patch 0005, see above.)*
 - [ ] **Step 4:** Run `sh tests/test_omg_tune.sh` and `shellcheck -s sh tuning/omg-tune.sh tests/test_omg_tune.sh`. Expected: PASS and no output.
 - [ ] **Step 5:** Commit with the message `Use per-frequency above_hispeed_delay where the kernel supports it`.
 

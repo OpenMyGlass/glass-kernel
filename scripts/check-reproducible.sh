@@ -7,7 +7,7 @@ scripts/build.sh >/dev/null
 mkdir -p out/first
 cp out/build/arch/arm/boot/Image out/build/vmlinux out/zImage out/pvrsrvkm_sgx540_120.ko out/first/
 cp -r out/build/usr out/first/usr 2>/dev/null || true
-echo "variant: ${VARIANT:-stock}"; scripts/build.sh >/dev/null
+scripts/build.sh >/dev/null
 for f in Image vmlinux zImage pvrsrvkm_sgx540_120.ko; do
     a=out/first/$f
     case "$f" in
