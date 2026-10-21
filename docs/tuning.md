@@ -32,12 +32,14 @@ So above about 35 °C, which is normal when Glass is worn, the CPU is already li
 | `hispeed_freq` (kHz) | 1008000 | 600000 | 600000 |
 | `go_hispeed_load` (%) | 99 | 90 | 95 |
 | `target_loads` (%) | 90 | 85 | 85 |
-| `above_hispeed_delay` (µs) | 20000 | 40000 | 60000 |
+| `above_hispeed_delay` (µs) | 20000 | `40000 800000:60000` | `60000 800000:80000` |
 | `min_sample_time` (µs) | 80000 | 60000 | 60000 |
 | `timer_rate` (µs) | 20000 | 20000 | 30000 |
 | eMMC I/O scheduler | cfq | deadline | deadline |
 
 - **balanced** keeps bursts up to 1008 MHz, but goes to 600 MHz first instead of straight to the maximum.
+- `above_hispeed_delay` takes a per-frequency list on the `tuned` build (see the backports below): the first value applies from `hispeed_freq` (600 MHz in these profiles) up to the next listed step, the second at 800 MHz and above. In `cool` (max 800 MHz), 800 MHz is the top step, so the `800000:80000` entry never applies and only `60000` matters. On a kernel without per-frequency support, the profile writes only the first value.
+- The profiles do not set `io_is_busy`; `status` shows it when present.
 - **cool** never uses the 1.388 V NITRO point. It mostly differs from stock when Glass is cool, for example right after waking up.
 
 To try one over adb (needs root adb, from glass-rom's insecure boot image):
@@ -51,11 +53,48 @@ adb shell sh /data/local/tmp/omg-tune.sh status
 
 ## The `tuned` build
 
-`VARIANT=tuned scripts/build-in-container.sh`, built by CI as the `kernel-tuned` artifact. It differs from stock only in `configs/tuned.config`:
+`VARIANT=tuned scripts/build-in-container.sh`, built by CI as the `kernel-tuned` artifact. It differs from stock in `configs/tuned.config` and in the patches under `patches/tuned/`, which only this variant applies:
 - the default I/O scheduler is deadline;
-- two debug-only statistics are off.
+- two debug-only statistics are off;
+- the debugging and tracing options below, which cost time at runtime, are off;
+- the interactive governor has two later AOSP features, backported with their upstream follow-up fixes (see below).
 
-`PM_DEBUG` stays on, because OMAP's off-mode switches live under it.
+| Option off | Runtime cost in stock |
+|---|---|
+| `DEBUG_SPINLOCK` | checks owner and magic on every spinlock lock and unlock, and makes `spinlock_t` larger |
+| `DEBUG_MUTEXES` | checks every mutex lock and unlock, and disables mutex spinning (`MUTEX_SPIN_ON_OWNER` comes back on) |
+| `DEBUG_RT_MUTEXES` | checks every rt-mutex operation (futex priority inheritance, used by Android) |
+| `DEBUG_PI_LIST` | walks and checks the priority list on every rt-mutex enqueue and dequeue |
+| `IRQSOFF_TRACER` | hooks every interrupt disable and enable (`TRACE_IRQFLAGS`), even when not tracing |
+| `FUNCTION_TRACER` | builds the kernel with `-pg`: an mcount call in every function prologue |
+| `FUNCTION_GRAPH_TRACER` | depends on `FUNCTION_TRACER`; adds return hooks |
+| `FUNCTION_PROFILER` | depends on `FUNCTION_TRACER`; per-function hit counters |
+| `PERSISTENT_TRACER` | Android's last-function-before-reset tracer; it selects `FUNCTION_TRACER`, so it has to go too. Notle registers no device for it, so it is unused in stock |
+| `SCHEDSTATS` | updates scheduler statistics on every enqueue, dequeue and context switch |
+| `TIMER_STATS` | records the caller of every timer start (`/proc/timer_stats`) |
+| `KPROBES` | keeps the kprobe hooks in the exception and fault paths; nothing on Glass sets probes |
+| `OPROFILE` | profiler driver and its hooks; Android uses `perf` events, which stay |
+
+Side effects Kconfig resolves on its own: `MUTEX_SPIN_ON_OWNER` turns on (it needs `DEBUG_MUTEXES` off), `SPLIT_PTLOCK_CPUS` goes from 999999 to 4 (split page-table locks need `DEBUG_SPINLOCK` off), and `KRETPROBES` and `KPROBE_EVENT` go with `KPROBES`. With no function tracer left, nothing selects `TRACING` any more, so the fragment turns on `ENABLE_DEFAULT_TRACERS` and checks that `EVENT_TRACING` and `TRACEPOINTS` stay on.
+
+Debug options that stay on:
+- `PM_DEBUG`, because OMAP's off-mode switches live under it;
+- `DEBUG_FS`, because power and thermal tools read it;
+- `FTRACE`, `TRACEPOINTS` and `EVENT_TRACING`, because Android's `atrace` and `systrace` use event tracing, which costs nothing while it is off;
+- `DEBUG_KERNEL` and `KALLSYMS`, which only gate other options and give readable oopses.
+
+### Interactive governor backports (`patches/tuned/`)
+
+- `0001`–`0004`: AOSP `kernel/common` android-3.4 (now `deprecated/android-3.4`) commits e43dde3b (per-frequency `above_hispeed_delay`), fbcad723 (`io_is_busy`), and their upstream fixes cad16844 (crash on a malformed write) and 2e745d35 (uninitialised spinlock).
+- `0005` (OpenMyGlass): `io_is_busy` defaults to 1.
+
+The two new knobs, under `/sys/devices/system/cpu/cpufreq/interactive/`:
+- `above_hispeed_delay` takes either one delay `D` or a list `D F:D …`, with the same syntax as `target_loads`. For example, `20000 800000:80000` waits 20 ms below 800 MHz and 80 ms at 800 MHz before going higher. Stock XE24 kernels take only the single value.
+- `io_is_busy` (0 or 1). On this 3.4 kernel, `get_cpu_idle_time_us` leaves iowait out, so the stock governor counts iowait as busy. The tuned default `io_is_busy=1` matches stock. `0` counts iowait as idle (the upstream default); it is an option to measure, and may ramp up less during eMMC-heavy work.
+
+`above_hispeed_delay` and `target_loads` read back with a trailing space (`20000 `). The kernel rejects that string, so trim it before writing a saved value back.
+
+Size, from the CI artifacts of run 39650912927 (before the patches): the `tuned` `zImage` is 4,839,160 bytes, against 5,075,816 for `stock` (236,656 bytes, 4.7%, smaller).
 
 ## Deliberately not done
 - **Undervolting:** SmartReflex 1.5 already trims voltages, and OMAP4 kernels that undervolted saw random reboots for little gain.
@@ -71,6 +110,8 @@ Then, for each profile, starting at full charge and room temperature, run three 
 1. idle with the screen off;
 2. turn-by-turn navigation from OpenMyGlass with the screen on;
 3. video recording.
+
+One more axis separates the config effect from the profile effect: the `stock` build against the `tuned` build, each with the `stock` profile, in the same three scenarios. Later, optionally, `io_is_busy` 1 against 0 on the `tuned` build.
 
 Record, every 30 s, over adb:
 - **battery:** `cat /sys/class/power_supply/*/capacity` and `current_now` where available;

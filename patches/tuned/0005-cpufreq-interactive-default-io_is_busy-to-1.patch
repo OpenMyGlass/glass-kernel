@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: OpenMyGlass <openmyglass@users.noreply.github.com>
+Date: Wed, 21 Oct 2026 20:34:30 +0200
+Subject: [PATCH] cpufreq: interactive: default io_is_busy to 1
+
+On the Glass glass-omap-xrx13b kernel (3.4), get_cpu_idle_time_us()
+excludes iowait, so the stock interactive governor counts iowait as
+busy time. The io_is_busy backport defaults to 0, which would count
+iowait as idle and change how the tuned build measures load.
+
+Default io_is_busy to 1 so that the tuned build keeps the stock
+accounting. Writing 0 to
+/sys/devices/system/cpu/cpufreq/interactive/io_is_busy still selects
+the upstream behaviour, for measurement.
+
+This change is licensed under GPL-2.0-only, like the file it changes.
+---
+ drivers/cpufreq/cpufreq_interactive.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/cpufreq/cpufreq_interactive.c b/drivers/cpufreq/cpufreq_interactive.c
+index d1e8b86..85d2108 100644
+--- a/drivers/cpufreq/cpufreq_interactive.c
++++ b/drivers/cpufreq/cpufreq_interactive.c
+@@ -114,7 +114,7 @@ static u64 boostpulse_endtime;
+ #define DEFAULT_TIMER_SLACK (4 * DEFAULT_TIMER_RATE)
+ static int timer_slack_val = DEFAULT_TIMER_SLACK;
+ 
+-static bool io_is_busy;
++static bool io_is_busy = true;
+ 
+ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
+ 		unsigned int event);

@@ -2,6 +2,7 @@
 # Build twice from scratch and report where the outputs differ (run in the container).
 set -eu
 cd "$(dirname "$0")/.."
+echo "variant: ${VARIANT:-stock}"
 scripts/build.sh >/dev/null
 mkdir -p out/first
 cp out/build/arch/arm/boot/Image out/build/vmlinux out/zImage out/pvrsrvkm_sgx540_120.ko out/first/

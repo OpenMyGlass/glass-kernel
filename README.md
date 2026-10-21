@@ -4,6 +4,8 @@ Kernel builds for Google Glass Explorer Edition on its final firmware, XE24 (TI 
 
 ## Status
 
+Phase 4: lean tuned build (no lock debugging or runtime tracers; per-frequency above_hispeed_delay, io_is_busy). Not measured on hardware. See [`docs/tuning.md`](docs/tuning.md).
+
 Phase 3: GPU module built from source (DDK 1.9@2166536), importing the same kernel symbols with the same CRCs as the stock module (not yet run on hardware). See [`docs/gpu-module.md`](docs/gpu-module.md).
 
 Phase 2: tuning prepared, not yet measured on hardware. There are runtime profiles (`tuning/omg-tune.sh`: `stock`, `balanced`, `cool`) and a `tuned` build variant (deadline I/O scheduler, no debug-only statistics). See [`docs/tuning.md`](docs/tuning.md).
