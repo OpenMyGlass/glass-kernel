@@ -39,7 +39,7 @@ run cool >/dev/null 2>&1; check "cool exit" 0 $?
 check "cool max" 800000 "$(val devices/system/cpu/cpu0/cpufreq/scaling_max_freq)"
 check "cool hispeed" 600000 "$(val devices/system/cpu/cpufreq/interactive/hispeed_freq)"
 check "cool go_hispeed_load" 95 "$(val devices/system/cpu/cpufreq/interactive/go_hispeed_load)"
-check "cool above_hispeed_delay" 60000 "$(val devices/system/cpu/cpufreq/interactive/above_hispeed_delay)"
+check "cool above_hispeed_delay" "60000 800000:80000" "$(val devices/system/cpu/cpufreq/interactive/above_hispeed_delay)"
 check "cool timer_rate" 30000 "$(val devices/system/cpu/cpufreq/interactive/timer_rate)"
 check "cool scheduler" deadline "$(val block/mmcblk0/queue/scheduler)"
 
@@ -53,6 +53,47 @@ run balanced >/dev/null 2>&1
 check "balanced max" 1008000 "$(val devices/system/cpu/cpu0/cpufreq/scaling_max_freq)"
 check "balanced hispeed" 600000 "$(val devices/system/cpu/cpufreq/interactive/hispeed_freq)"
 check "balanced target_loads" 85 "$(val devices/system/cpu/cpufreq/interactive/target_loads)"
+check "balanced above_hispeed_delay" "40000 800000:60000" "$(val devices/system/cpu/cpufreq/interactive/above_hispeed_delay)"
+rm -rf "$root"
+
+# A kernel that parses only the first number reads back a single value: that is accepted
+# quietly (exit 0, nothing printed). OMG_TEST_FIRST_TOKEN_ONLY is the script's test-only hook
+# that makes the write behave like such a kernel.
+test_fallback_single_delay() {
+    setup
+    out=$(OMG_TEST_FIRST_TOKEN_ONLY=1 run balanced 2>&1); status=$?
+    check "fallback exit" 0 "$status"
+    check "fallback output" "" "$out"
+    check "fallback delay" 40000 "$(val devices/system/cpu/cpufreq/interactive/above_hispeed_delay)"
+    rm -rf "$root"
+    # If even the single value does not read back, it is still a failure.
+    setup
+    chmod a-w "$gov/above_hispeed_delay"
+    out=$(run balanced 2>&1); status=$?
+    if [ "$(id -u)" -ne 0 ]; then
+        check "unwritable delay exit" 1 "$status"
+        case "$out" in *above_hispeed_delay*) ;; *) echo "FAIL: unwritable delay not reported"; fail=1 ;; esac
+    fi
+    rm -rf "$root"
+    setup
+    rm "$gov/above_hispeed_delay"
+    ln -s /dev/null "$gov/above_hispeed_delay"
+    out=$(run balanced 2>&1); status=$?
+    check "unreadable-back delay exit" 1 "$status"
+    case "$out" in *above_hispeed_delay*) ;; *) echo "FAIL: delay mismatch not reported"; fail=1 ;; esac
+    rm -rf "$root"
+}
+test_fallback_single_delay
+
+# status lists io_is_busy and above_hispeed_delay when present, and says nothing of io_is_busy otherwise.
+setup
+echo 0 > "$gov/io_is_busy"
+out=$(run status 2>&1)
+case "$out" in *"io_is_busy: 0"*) ;; *) echo "FAIL: status lacks io_is_busy: $out"; fail=1 ;; esac
+case "$out" in *"above_hispeed_delay: 20000"*) ;; *) echo "FAIL: status lacks above_hispeed_delay: $out"; fail=1 ;; esac
+rm "$gov/io_is_busy"
+out=$(run status 2>&1)
+case "$out" in *io_is_busy*) echo "FAIL: status mentions missing io_is_busy"; fail=1 ;; esac
 rm -rf "$root"
 
 # Missing tunables are skipped, the rest is still applied, and the exit status reports it.
