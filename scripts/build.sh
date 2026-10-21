@@ -28,14 +28,18 @@ BUILD=$PWD/out/build
 rm -rf "$BUILD"
 mkdir -p "$BUILD"
 
-# Apply our patches to a pristine tree.
+# Apply our patches to a pristine tree: patches/ for every variant, then patches/<variant>/.
 git -C src checkout -q --force "$COMMIT"
 git -C src clean -qfdx
-for p in patches/*.patch; do
-    [ -e "$p" ] || continue
-    echo "applying $p"
-    git -C src apply --check "../$p"
-    git -C src apply "../$p"
+patch_dirs=patches
+if [ "$VARIANT" = tuned ]; then patch_dirs="patches patches/tuned"; fi
+for d in $patch_dirs; do
+    for p in "$d"/*.patch; do
+        [ -e "$p" ] || continue
+        echo "applying $p"
+        git -C src apply --check "../$p"
+        git -C src apply "../$p"
+    done
 done
 
 KBUILD_BUILD_TIMESTAMP=$(git -C src log -1 --format=%cD)
@@ -98,4 +102,4 @@ arm-linux-gnueabi-strip --strip-unneeded "$OUT/$ko"
 
 cp "$BUILD/arch/arm/boot/zImage" "$OUT/zImage"
 cp "$BUILD/.config" "$OUT/config"
-(cd "$OUT" && sha256sum zImage "$ko" config > SHA256SUMS && cat SHA256SUMS)
+(cd "$OUT" && sha256sum zImage "$ko" config > SHA256SUMS && cat SHA256SUMS && wc -c zImage "$ko")
