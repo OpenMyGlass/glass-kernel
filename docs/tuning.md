@@ -111,6 +111,16 @@ Limits: the boost never goes above `hispeed_freq`. Whatever `hispeed_freq` is, `
 
 Known upstream limits, kept as they were: the handler has a single work item to open devices, so if two matching devices connect at the same moment (for example a USB HID touchscreen already plugged in when the governor starts), only the second is opened, and unplugging the first later underflows its open count; a failed `input_open_device()` leaks the handle. On Glass only the touchpad matches, and it is never removed.
 
+Build results, from CI run 39683348523 (repro run 39683348561: `identical` for `Image`, `vmlinux`, `zImage` and the module in all three variants):
+
+| Variant | `zImage` SHA-256 | size | `pvrsrvkm_sgx540_120.ko` |
+|---|---|---|---|
+| `stock` (unchanged) | `5b744fef8f8688562e19b8311225f324037aad49901ed78ee6854529de15caa1` | 5,075,816 | `1ec003f3…` (unchanged) |
+| `tuned` | `12133e10cd244e20f78e26270addf529dd541504f7f58b20b48c484f58b59438` | 4,839,984 | `69afa570…`, byte-identical to before |
+| `tuned-stable` | `6afd863d527c971b0ca001f3876841ce8fe63428cf4c4218f5d033838342eda3` | 4,846,024 | `b32408ca…`, byte-identical to before |
+
+The GPU modules are byte-identical to those of main (run 39671222156), and `scripts/compare_ko.py` reports `modules match` for both: the patches export nothing and change no structure the module uses, so no CRC changes.
+
 Size, from the CI artifacts of run 39650912927 (before the patches): the `tuned` `zImage` is 4,839,160 bytes, against 5,075,816 for `stock` (236,656 bytes, 4.7%, smaller).
 
 ### `tuned-stable`
