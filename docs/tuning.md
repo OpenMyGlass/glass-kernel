@@ -39,7 +39,7 @@ So above about 35 °C, which is normal when Glass is worn, the CPU is already li
 
 - **balanced** keeps bursts up to 1008 MHz, but goes to 600 MHz first instead of straight to the maximum.
 - `above_hispeed_delay` takes a per-frequency list on the `tuned` build (see the backports below): the first value applies from `hispeed_freq` (600 MHz in these profiles) up to the next listed step, the second at 800 MHz and above. In `cool` (max 800 MHz), 800 MHz is the top step, so the `800000:80000` entry never applies and only `60000` matters. On a kernel without per-frequency support, the profile writes only the first value.
-- The profiles do not set `io_is_busy`; `status` shows it when present.
+- The profiles do not set `io_is_busy` or `input_boost`; `status` shows them when present. `omg-tune.sh input-boost on|off` sets `input_boost` on its own.
 - **cool** never uses the 1.388 V NITRO point. It mostly differs from stock when Glass is cool, for example right after waking up.
 
 To try one over adb (needs root adb, from glass-rom's insecure boot image):
@@ -57,7 +57,8 @@ adb shell sh /data/local/tmp/omg-tune.sh status
 - the default I/O scheduler is deadline;
 - two debug-only statistics are off;
 - the debugging and tracing options below, which cost time at runtime, are off;
-- the interactive governor has two later AOSP features, backported with their upstream follow-up fixes (see below).
+- the interactive governor has two later AOSP features, backported with their upstream follow-up fixes (see below);
+- the interactive governor boosts to `hispeed_freq` on touchpad input (see [Touchpad input boost](#touchpad-input-boost-patchestuned0006-0007)).
 
 | Option off | Runtime cost in stock |
 |---|---|
@@ -94,6 +95,19 @@ The two new knobs, under `/sys/devices/system/cpu/cpufreq/interactive/`:
 
 `above_hispeed_delay` and `target_loads` read back with a trailing space (`20000 `). The kernel rejects that string, so trim it before writing a saved value back.
 
+### Touchpad input boost (`patches/tuned/0006`, `0007`)
+
+- `0006`: AOSP `kernel/common` android-3.4 commit 7820a652 "cpufreq: interactive: Boost frequency on touchscreen input" (Todd Poynor, 2012). It is in Glass's own history: AOSP removed it again in July 2012 (4e27eb56, "now handled in userspace Power HAL instead"), and TI's copy of that removal (a021a1c1) is in `glass-omap-xrx13b`. The patch brings back the handler as it was just before the removal, with the later AOSP changes 9fb15315, 2e739a07 and a9a7eb00 that it had by then. The `android-3.0` copy of 7820a652 is 2e21b68c.
+- `0007` (OpenMyGlass): `input_boost` defaults to 1.
+
+The knob is `/sys/devices/system/cpu/cpufreq/interactive/input_boost`: `1` (the default on `tuned` and `tuned-stable`) or `0` (off). The `stock` build and stock XE24 have no such file.
+
+What it does: on each input report (`SYN_REPORT`) from a matching device, every online CPU below `hispeed_freq` is raised to it, and the floor is set to `hispeed_freq`. So the speed stays at `hispeed_freq` or above for `min_sample_time` after the **last** report (80 ms by kernel default, 60 ms in `balanced` and `cool`), then drops by load as usual. `boostpulse_duration` does not apply to it. A finger on the touchpad sends reports continuously (the rate is set by the controller and not measured yet), so the boost lasts for the touch plus `min_sample_time`.
+
+How it matches the touchpad: Glass's touchpad is a Synaptics TM2240 (`rmi_i2c` at 0x20 on I2C bus 3), driven by RMI4 F11 as input device `sensor00fn11`. It reports `EV_ABS` with `ABS_MT_POSITION_X/Y` (multi-touch protocol A) and has no `BTN_TOUCH`, `ABS_X` or `ABS_Y`. So upstream's "touchpad" entry (`BTN_TOUCH` + `ABS_X/Y`, a single-touch touchpad) does not match it, but the "multi-touch touchscreen" entry (`EV_ABS` + `ABS_MT_POSITION_X/Y`) does, and the match table needs no change. No other input driver built for notle has those axes (the LTR-506 light and proximity sensor uses `ABS_MISC` and `ABS_DISTANCE`; the MPU-9150 is an IIO device). A USB or Bluetooth HID, or uinput, device with multi-touch axes would match too. At boot, `dmesg` shows `cpufreq_interactive_input_connect: connect to sensor00fn11`.
+
+Limits: the boost never goes above `hispeed_freq`. Whatever `hispeed_freq` is, `omap_target()` picks only table frequencies within `scaling_min_freq`–`scaling_max_freq`, and `omap_cpufreq_scale()` clamps to the thermal limit, so it cannot reach a frequency that the governor could not already select, and nothing above the 1008 MHz OPP. With the kernel default `hispeed_freq` (the policy maximum, 1008 MHz, also what the `stock` profile writes), a touch goes to 1008 MHz when the thermal table allows; `balanced` and `cool` make it 600 MHz.
+
 Size, from the CI artifacts of run 39650912927 (before the patches): the `tuned` `zImage` is 4,839,160 bytes, against 5,075,816 for `stock` (236,656 bytes, 4.7%, smaller).
 
 ### `tuned-stable`
@@ -115,7 +129,7 @@ Then, for each profile, starting at full charge and room temperature, run three 
 2. turn-by-turn navigation from OpenMyGlass with the screen on;
 3. video recording.
 
-One more axis separates the config effect from the profile effect: the `stock` build against the `tuned` build, each with the `stock` profile, in the same three scenarios. Later, optionally, `io_is_busy` 1 against 0 on the `tuned` build.
+One more axis separates the config effect from the profile effect: the `stock` build against the `tuned` build, each with the `stock` profile, in the same three scenarios. Later, optionally, `io_is_busy` 1 against 0 on the `tuned` build, and `input_boost` 1 against 0 on the `tuned` build in the navigation scenario with touchpad use (swiping through cards every few seconds), for drain, temperature and dropped frames.
 
 Record, every 30 s, over adb:
 - **battery:** `cat /sys/class/power_supply/*/capacity` and `current_now` where available;
