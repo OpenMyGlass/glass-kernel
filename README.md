@@ -4,7 +4,7 @@ Kernel builds for Google Glass Explorer Edition on its final firmware, XE24 (TI 
 
 ## Status
 
-Phase 3: GPU module built from source (DDK 1.9@2166536), matching the stock module's interfaces. See [`docs/gpu-module.md`](docs/gpu-module.md).
+Phase 3: GPU module built from source (DDK 1.9@2166536), importing the same kernel symbols with the same CRCs as the stock module (not yet run on hardware). See [`docs/gpu-module.md`](docs/gpu-module.md).
 
 Phase 2: tuning prepared, not yet measured on hardware. There are runtime profiles (`tuning/omg-tune.sh`: `stock`, `balanced`, `cool`) and a `tuned` build variant (deadline I/O scheduler, no debug-only statistics). See [`docs/tuning.md`](docs/tuning.md).
 
@@ -26,11 +26,13 @@ scripts/build-in-container.sh    # docker or podman: fetches src/ and builds
 
 The kernel tree is kept in a container volume (`glass-kernel-src`) because Linux 3.4 has paths that differ only by case, which a default macOS volume cannot hold.
 
-The build also produces the GPU module, `out/pvrsrvkm_sgx540_120.ko`. The output is `out/zImage` plus `out/config` and `out/SHA256SUMS`. Builds are bit-for-bit reproducible: `scripts/check-reproducible.sh` (the `repro` workflow) builds twice and compares `Image`, `vmlinux` and `zImage`. `__DATE__`/`__TIME__`, which the `bcmdhd` Wi-Fi driver embeds, are pinned to the source commit date. GitHub Actions runs the same build on every push.
+`pvr/` (the GPU driver source) is fetched on the host by `scripts/fetch-pvr.sh`, which needs git 2.25 or newer.
+
+The build also produces the GPU module, `out/pvrsrvkm_sgx540_120.ko`. The output is `out/zImage` plus `out/config` and `out/SHA256SUMS`. Builds are bit-for-bit reproducible: `scripts/check-reproducible.sh` (the `repro` workflow) builds twice and compares `Image`, `vmlinux`, `zImage` and `pvrsrvkm_sgx540_120.ko`. `__DATE__`/`__TIME__`, which the `bcmdhd` Wi-Fi driver embeds, are pinned to the source commit date. GitHub Actions runs the same build on every push.
 
 ## Safety
 
-This repository builds a kernel and does not touch a device. Booting it on Glass comes in a later phase, and only with `fastboot boot`, which runs from RAM and writes nothing. Never flash the `bootloader`, `xloader` or `fpga` partitions: no public way to recover from that is known.
+This repository builds a kernel and does not touch a device. Booting it on Glass is done only with `fastboot boot`, which runs from RAM and writes nothing. Never flash the `bootloader`, `xloader` or `fpga` partitions: no public way to recover from that is known.
 
 ## License
 

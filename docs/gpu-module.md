@@ -10,7 +10,7 @@ The SGX540 driver, `pvrsrvkm_sgx540_120.ko`, is built from source together with 
 
 ## How it is built
 
-After the kernel (`zImage`, `modules_prepare`), `scripts/build.sh` copies the DDK to `out/pvr-build` and runs the DDK's `omap4430_android` makefiles against the kernel build directory. The exact variables are in `scripts/build.sh`. `PLATFORM_VERSION=4.0` selects ICS-era DDK options that are not yet checked against the stock module's build options (see [`hardware-checks.md`](hardware-checks.md)).
+After the kernel (`zImage`, `modules_prepare`), `scripts/build.sh` copies the DDK to `out/pvr-build` and runs the DDK's `omap4430_android` makefiles against the kernel build directory. The exact variables are in `scripts/build.sh`. `PLATFORM_VERSION=4.0` selects ICS-era DDK options that are not yet checked against the stock module's build options (see Open items).
 
 ## Comparison with the stock module
 
@@ -25,10 +25,16 @@ After the kernel (`zImage`, `modules_prepare`), `scripts/build.sh` copies the DD
 | Module parameter | `gPVRDebugLevel` | `gPVRDebugLevel` |
 
 - Only `LOCALVERSION` differs in vermagic.
-- All CRCs are identical, so xrx13b exposes exactly the interfaces the stock module was built against.
+- xrx13b exports every symbol the stock module imports, with identical CRCs.
 - The built module is stripped (426100 bytes for `stock`, 426092 for `tuned`); the stock one is not (3647097 bytes).
 - The module build is reproducible: repro run 39634998806 reports `pvrsrvkm_sgx540_120.ko: identical`.
+- The `.ko` SHA-256 is identical across two CI runs on different runners (39637279820 and 39638777984): stock `1ec003f32c94512564404bd80b9802f8715d1995df017c5bfae9b99c0cc991c8`, tuned `e632492d7031f43bbca5888c256ea068b425543865863b12ab95f7f3976ad079`.
 
 ## What it unlocks
 
 Config changes that alter structures used by the module are possible, because the module is rebuilt with the kernel. Each such change must re-run `compare_ko.py` and expect CRC differences only where intended.
+
+## Open items
+
+- Compare the DDK build options of the stock module with ours (offline). `PLATFORM_VERSION=4.0` in `scripts/build.sh` selects ICS-era options that are not yet checked.
+- Test the module on hardware: see [`hardware-checks.md`](hardware-checks.md).
