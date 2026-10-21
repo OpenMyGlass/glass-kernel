@@ -78,7 +78,7 @@ make -C src O="$BUILD" -j"$(nproc)" zImage
 make -C src O="$BUILD" -j"$(nproc)" modules_prepare
 PVR_BUILD=$OUT/pvr-build
 ko=pvrsrvkm_sgx540_120.ko
-rm -rf "$PVR_BUILD" "$OUT/$ko"
+rm -rf "${PVR_BUILD:?}" "${OUT:?}/$ko"
 cp -R "pvr/$PVR_PATH" "$PVR_BUILD"
 for p in pvr-patches/*.patch; do
     [ -e "$p" ] || continue
