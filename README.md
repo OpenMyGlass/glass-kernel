@@ -4,6 +4,8 @@ Kernel builds for Google Glass Explorer Edition on its final firmware, XE24 (TI 
 
 ## Status
 
+Phase 3: GPU module built from source (DDK 1.9@2166536), matching the stock module's interfaces. See [`docs/gpu-module.md`](docs/gpu-module.md).
+
 Phase 2: tuning prepared, not yet measured on hardware. There are runtime profiles (`tuning/omg-tune.sh`: `stock`, `balanced`, `cool`) and a `tuned` build variant (deadline I/O scheduler, no debug-only statistics). See [`docs/tuning.md`](docs/tuning.md).
 
 Phase 1: a reproducible build of Google's published kernel source, with no changes yet. Nothing here has been run on hardware yet.
@@ -24,7 +26,7 @@ scripts/build-in-container.sh    # docker or podman: fetches src/ and builds
 
 The kernel tree is kept in a container volume (`glass-kernel-src`) because Linux 3.4 has paths that differ only by case, which a default macOS volume cannot hold.
 
-The output is `out/zImage` plus `out/config` and `out/SHA256SUMS`. Builds are bit-for-bit reproducible: `scripts/check-reproducible.sh` (the `repro` workflow) builds twice and compares `Image`, `vmlinux` and `zImage`. `__DATE__`/`__TIME__`, which the `bcmdhd` Wi-Fi driver embeds, are pinned to the source commit date. GitHub Actions runs the same build on every push.
+The build also produces the GPU module, `out/pvrsrvkm_sgx540_120.ko`. The output is `out/zImage` plus `out/config` and `out/SHA256SUMS`. Builds are bit-for-bit reproducible: `scripts/check-reproducible.sh` (the `repro` workflow) builds twice and compares `Image`, `vmlinux` and `zImage`. `__DATE__`/`__TIME__`, which the `bcmdhd` Wi-Fi driver embeds, are pinned to the source commit date. GitHub Actions runs the same build on every push.
 
 ## Safety
 
