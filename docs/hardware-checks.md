@@ -11,15 +11,15 @@
 
 Only with the owner present. `fastboot boot` runs from RAM and writes nothing to the device. These steps check the GPU module.
 
-XE24's `init.omap4430.rc` runs `insmod /system/lib/modules/pvrsrvkm_sgx540_120.ko` in `on fs` and then starts `service pvrsrvinit /vendor/bin/pvrsrvinit`. Because the kernel is built with `CONFIG_MODVERSIONS`, it ignores the `LOCALVERSION` part of vermagic. On the `stock` variant all 167 CRCs match, so the stock module would most likely load into it, and booting without further steps would test the stock module, not ours. On `tuned` and `tuned-stable`, 90 CRCs differ, so the stock module cannot load at all.
+XE24's `init.omap4430.rc` runs `insmod /system/lib/modules/pvrsrvkm_sgx540_120.ko` in `on fs` and then starts `service pvrsrvinit /vendor/bin/pvrsrvinit`. Because the kernel is built with `CONFIG_MODVERSIONS`, it does not compare the kernel release part of vermagic (it checks the symbol CRCs instead). On the `stock` variant all 167 CRCs match, so the stock module would most likely load into it, and booting without further steps would test the stock module, not ours. On `tuned` and `tuned-stable`, 90 CRCs differ and two symbols it imports (`__gnu_mcount_nc`, `__rwlock_init`) are missing, so the stock module cannot load at all.
 
 To test ours, the stock module must never be loaded:
 
-1. The boot image we `fastboot boot` carries its own ramdisk, which contains `init.omap4430.rc`. Build it with glass-rom from the owner's `boot.img` and the `zImage` and `pvrsrvkm_sgx540_120.ko` of the same CI artifact: `tools/make_insecure_boot.py factory/boot.img out/boot-test.img --kernel zImage --pvr-module pvrsrvkm_sgx540_120.ko`. It puts our module at `/lib/modules/pvrsrvkm_sgx540_120.ko` in the ramdisk and changes the `on fs` line `insmod /system/lib/modules/pvrsrvkm_sgx540_120.ko` to `insmod /lib/modules/pvrsrvkm_sgx540_120.ko`. Nothing is written to the device.
+1. The boot image we `fastboot boot` carries its own ramdisk, which contains `init.omap4430.rc`. Build it with glass-rom (`make_insecure_boot.py --pvr-module`, from OpenMyGlass/glass-rom#16) from the owner's `boot.img` and the `zImage` and `pvrsrvkm_sgx540_120.ko` of the same CI artifact: `tools/make_insecure_boot.py factory/boot.img out/boot-test.img --kernel zImage --pvr-module pvrsrvkm_sgx540_120.ko`. It puts our module at `/lib/modules/pvrsrvkm_sgx540_120.ko` in the ramdisk and changes the `on fs` line `insmod /system/lib/modules/pvrsrvkm_sgx540_120.ko` to `insmod /lib/modules/pvrsrvkm_sgx540_120.ko`. Nothing is written to the device.
 2. Check that the module is ours:
    - (a) On the host, before booting: the boot image's ramdisk `init.omap4430.rc` contains no `/system/lib/modules/pvrsrvkm` line (for example `grep -c /system/lib/modules/pvrsrvkm init.omap4430.rc` prints `0`).
    - (b) On the device: `adb shell cat /proc/modules` lists `pvrsrvkm_sgx540_120`.
-3. `adb shell dmesg`: there must be no `PVRSRV_ERROR_DDK_VERSION_MISMATCH` and no `BUILD_MISMATCH` after `pvrsrvinit` runs.
+3. `adb shell dmesg | grep SGXInit`: after `pvrsrvinit` runs there must be no `(FAIL)` line, such as `(FAIL) SGXInit: Mismatch in client-side and KM driver build options` or `(FAIL) SGXInit: Incompatible driver DDK revision` (the messages behind `PVRSRV_ERROR_BUILD_MISMATCH` and `PVRSRV_ERROR_DDK_VERSION_MISMATCH`).
 4. Check that SurfaceFlinger starts (`adb shell ps | grep surfaceflinger`, and the display works).
 
 ## `tuned-stable` (3.4.113) boot checks — NOT RUN
