@@ -9,12 +9,17 @@ jobs:
   repro:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    strategy:
+      matrix:
+        variant: [stock, tuned]
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - run: |
+      - env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
           scripts/fetch-pvr.sh
           docker build --platform linux/amd64 -t glass-kernel-build .
-          docker run --rm --platform linux/amd64 -v "$PWD:/work" -v glass-kernel-src:/work/src glass-kernel-build \
+          docker run --rm --platform linux/amd64 -e VARIANT -v "$PWD:/work" -v glass-kernel-src:/work/src glass-kernel-build \
             sh -c 'scripts/fetch-source.sh && scripts/check-reproducible.sh'
