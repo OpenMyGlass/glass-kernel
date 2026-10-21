@@ -10,6 +10,7 @@ engine=$(command -v docker || command -v podman || true)
 # the container's git 1.9 has neither.
 scripts/fetch-pvr.sh
 "$engine" build --platform linux/amd64 -t glass-kernel-build .
+# shellcheck disable=SC2016  # $HOST_UID is meant to expand inside the container
 "$engine" run --rm --platform linux/amd64 \
     -v "$PWD:/work:Z" -v glass-kernel-src:/work/src \
     -e VARIANT="${VARIANT:-stock}" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
