@@ -13,7 +13,7 @@ Change-Id: Ia83cccb195997789ac6afbf5b8761f7b278196d6
 Reported-by: Arve Hjønnevåg <arve@android.com>
 Signed-off-by: Todd Poynor <toddpoynor@google.com>
 
-(cherry picked from commit cad1684410541be5363d4af9ae8f3f35683a4dd4 in AOSP kernel/common android-3.4)
+(cherry picked from commit cad1684410541be5363d4af9ae8f3f35683a4dd4 in AOSP kernel/common android-3.4 (now deprecated/android-3.4))
 [OpenMyGlass: follow-up fix for the get_tokenized_data() added by the
  above_hispeed_delay backport; applies unchanged, only line offsets differ]
 ---

@@ -22,7 +22,7 @@ Change-Id: If7d70ff864c43bc9c8d7fd7cfc66f930d339f9b4
 Signed-off-by: Lianwei Wang <lian-wei.wang@motorola.com>
 Signed-off-by: Todd Poynor <toddpoynor@google.com>
 
-(cherry picked from commit fbcad7234e0aef2725d9f33ac5a0c3a9cc61a9ac in AOSP kernel/common android-3.4)
+(cherry picked from commit fbcad7234e0aef2725d9f33ac5a0c3a9cc61a9ac in AOSP kernel/common android-3.4 (now deprecated/android-3.4))
 [OpenMyGlass: update_load() hunk adapted. glass-omap-xrx13b already carries
  3022f93a "cpufreq: interactive: avoid underflow on active time calculation",
  so delta_idle and delta_time are u64 without casts in the hunk's context]

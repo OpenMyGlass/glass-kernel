@@ -29,7 +29,7 @@ Backtrace:
 Change-Id: I80a1e0b3fecb24adba501ff44f568479deeff7fa
 Signed-off-by: Minsung Kim <ms925.kim@samsung.com>
 
-(cherry picked from commit 2e745d359ffaa9f4acc4b00950d14322ff364919 in AOSP kernel/common android-3.4)
+(cherry picked from commit 2e745d359ffaa9f4acc4b00950d14322ff364919 in AOSP kernel/common android-3.4 (now deprecated/android-3.4))
 [OpenMyGlass: follow-up fix for the above_hispeed_delay_lock added by the
  above_hispeed_delay backport; applies unchanged, only line offsets differ]
 ---

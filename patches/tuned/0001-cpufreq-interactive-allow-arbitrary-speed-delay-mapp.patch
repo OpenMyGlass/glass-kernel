@@ -14,7 +14,7 @@ msecs when hispeed_freq is 1GHz.
 Change-Id: Ifeebede8b1acbdd0a53e5c6916bccbf764dc854f
 Signed-off-by: Minsung Kim <ms925.kim@samsung.com>
 
-(cherry picked from commit e43dde3b6cec1e1d36a477713bcfb1dda070bef2 in AOSP kernel/common android-3.4)
+(cherry picked from commit e43dde3b6cec1e1d36a477713bcfb1dda070bef2 in AOSP kernel/common android-3.4 (now deprecated/android-3.4))
 [OpenMyGlass: applies unchanged to the glass-omap-xrx13b file (989d925);
  only line offsets differ]
 ---
