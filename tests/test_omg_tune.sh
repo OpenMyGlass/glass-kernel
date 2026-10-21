@@ -96,6 +96,38 @@ out=$(run status 2>&1)
 case "$out" in *io_is_busy*) echo "FAIL: status mentions missing io_is_busy"; fail=1 ;; esac
 rm -rf "$root"
 
+# input_boost (tuned kernels only): status shows it when present; input-boost on|off sets it;
+# the profiles leave it alone.
+test_input_boost() {
+    setup
+    echo 1 > "$gov/input_boost"
+    out=$(run status 2>&1)
+    case "$out" in *"input_boost: 1"*) ;; *) echo "FAIL: status lacks input_boost: $out"; fail=1 ;; esac
+    out=$(run input-boost off 2>&1); status=$?
+    check "input-boost off exit" 0 "$status"
+    check "input-boost off output" "" "$out"
+    check "input-boost off value" 0 "$(val devices/system/cpu/cpufreq/interactive/input_boost)"
+    out=$(run input-boost on 2>&1); status=$?
+    check "input-boost on exit" 0 "$status"
+    check "input-boost on value" 1 "$(val devices/system/cpu/cpufreq/interactive/input_boost)"
+    run input-boost maybe >/dev/null 2>&1; check "input-boost bad arg exit" 2 $?
+    run input-boost >/dev/null 2>&1; check "input-boost no arg exit" 2 $?
+    check "input-boost bad arg untouched" 1 "$(val devices/system/cpu/cpufreq/interactive/input_boost)"
+    run cool >/dev/null 2>&1
+    check "cool leaves input_boost" 1 "$(val devices/system/cpu/cpufreq/interactive/input_boost)"
+    run stock >/dev/null 2>&1
+    check "stock leaves input_boost" 1 "$(val devices/system/cpu/cpufreq/interactive/input_boost)"
+    rm "$gov/input_boost"
+    out=$(run status 2>&1)
+    case "$out" in *input_boost*) echo "FAIL: status mentions missing input_boost"; fail=1 ;; esac
+    out=$(run input-boost off 2>&1); status=$?
+    check "input-boost missing exit" 1 "$status"
+    case "$out" in *input_boost*) ;; *) echo "FAIL: missing input_boost not reported: $out"; fail=1 ;; esac
+    [ -e "$gov/input_boost" ] && { echo "FAIL: input-boost created the file"; fail=1; }
+    rm -rf "$root"
+}
+test_input_boost
+
 # Missing tunables are skipped, the rest is still applied, and the exit status reports it.
 setup
 rm "$gov/timer_rate"

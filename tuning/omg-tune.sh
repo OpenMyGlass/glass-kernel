@@ -2,6 +2,7 @@
 # OpenMyGlass CPU tuning profiles for Glass XE24 (OMAP4430), applied through sysfs.
 #
 #   omg-tune.sh stock|balanced|cool|status
+#   omg-tune.sh input-boost on|off   (tuned kernels: boost to hispeed_freq on touchpad input)
 #
 # Nothing is persistent: a reboot returns to the defaults of the running kernel build
 # and of the system's init scripts, which may set their own values (see docs/tuning.md). Each
@@ -72,7 +73,7 @@ put() {  # file value
 status() {
     for f in "$POLICY/scaling_governor" "$POLICY/scaling_cur_freq" "$POLICY/scaling_max_freq" \
              "$GOV/hispeed_freq" "$GOV/go_hispeed_load" "$GOV/target_loads" \
-             "$GOV/above_hispeed_delay" "$GOV/io_is_busy" "$GOV/min_sample_time" "$GOV/timer_rate" "$QUEUE/scheduler"; do
+             "$GOV/above_hispeed_delay" "$GOV/io_is_busy" "$GOV/input_boost" "$GOV/min_sample_time" "$GOV/timer_rate" "$QUEUE/scheduler"; do
         [ -r "$f" ] && echo "${f##*/}: $(cat "$f")"
     done
     return 0
@@ -81,10 +82,25 @@ status() {
 # Tests source the functions only.
 [ -n "${OMG_LIB:-}" ] && return 0
 
+usage() {
+    echo "usage: $0 stock|balanced|cool|status" >&2
+    echo "       $0 input-boost on|off" >&2
+    exit 2
+}
+
 case "${1:-}" in
     status) status; exit 0 ;;
+    input-boost)
+        # Profiles leave input_boost alone; this sets it on its own. Kernels without it
+        # (stock XE24, the stock build) report the file as missing and exit 1.
+        case "${2:-}" in
+            on) put "$GOV/input_boost" 1 ;;
+            off) put "$GOV/input_boost" 0 ;;
+            *) usage ;;
+        esac
+        exit "$failed" ;;
     stock|balanced|cool) ;;
-    *) echo "usage: $0 stock|balanced|cool|status" >&2; exit 2 ;;
+    *) usage ;;
 esac
 
 # shellcheck disable=SC2046 # word splitting into the positional values is intended
