@@ -37,6 +37,19 @@ None of these has been run: no Glass is available. Only with the owner present, 
 
 If any check fails, record `dmesg`, `logcat` and the failing check in an issue, and go back to the stock kernel with a reboot.
 
+## Touchpad input boost (`tuned`, `tuned-stable`) — NOT RUN
+
+None of these has been run: no Glass is available. Only with the owner present, only with `fastboot boot` (RAM only, nothing written), after the boot and GPU module checks above pass on the same kernel. A reboot returns to the stock kernel. The knob is described in [`tuning.md`](tuning.md#touchpad-input-boost-patchestuned00060008).
+
+1. **Connected to the touchpad:** `adb shell dmesg | grep cpufreq_interactive_input_connect` shows `connect to sensor00fn11`, once. Record any other device it connects to.
+2. **Default:** `adb shell cat /sys/devices/system/cpu/cpufreq/interactive/input_boost` prints `1`, and `adb shell sh /data/local/tmp/omg-tune.sh status` lists `input_boost: 1`.
+3. **It fires on touch, and only then:** with tracing (`echo 1 > /sys/kernel/debug/tracing/events/cpufreq_interactive/cpufreq_interactive_boost/enable`, then `cat /sys/kernel/debug/tracing/trace_pipe`), swiping gives `cpufreq_interactive_boost: input` lines, and there are none, or only occasional ones, with the finger off the touchpad for 30 s (the F11 driver also reports a cover switch, `SW_CAMERA_LENS_COVER`, and each of its reports ends with `SYN_REPORT` too; record how many). Turn the event off afterwards.
+4. **The knob turns it off:** `omg-tune.sh input-boost off`; swiping gives no more `input` lines; `input-boost on` brings them back.
+5. **Frequency stays bounded:** while swiping, `scaling_cur_freq` never exceeds `scaling_max_freq` or `hispeed_freq`, also after `omg-tune.sh cool` (600 MHz hispeed, 800 MHz max).
+6. **Effect:** `cpu0/cpufreq/stats/time_in_state` read before and after 30 s of steady swiping through cards, once with `input_boost` 1 and once with 0: the time at `hispeed_freq` grows with 1. Note any visible difference in how quickly the cards respond.
+7. **Already boosted by the system?** With `input_boost` 0, trace `cpufreq_interactive_boost` while swiping: `pulse` lines mean XE24's power HAL already writes `boostpulse` on touch, and the kernel boost then mostly duplicates it. Record which.
+8. **Suspend:** screen off for 5 minutes, then wake with a tap: the touchpad still works and `dmesg` has no `cpufreq_interactive` or `rmi` errors.
+
 ## Debugging a boot with a normal USB cable
 
 No extra hardware is needed: everything below uses the micro-USB cable and `fastboot`/`adb`.
