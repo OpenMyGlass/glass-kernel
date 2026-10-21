@@ -4,12 +4,16 @@ set -eu
 cd "$(dirname "$0")/.."
 scripts/build.sh >/dev/null
 mkdir -p out/first
-cp out/build/arch/arm/boot/Image out/build/vmlinux out/zImage out/first/
+cp out/build/arch/arm/boot/Image out/build/vmlinux out/zImage out/pvrsrvkm_sgx540_120.ko out/first/
 cp -r out/build/usr out/first/usr 2>/dev/null || true
 scripts/build.sh >/dev/null
-for f in Image vmlinux zImage; do
+for f in Image vmlinux zImage pvrsrvkm_sgx540_120.ko; do
     a=out/first/$f
-    b=$( [ "$f" = zImage ] && echo out/zImage || echo out/build/$( [ "$f" = Image ] && echo arch/arm/boot/Image || echo vmlinux ))
+    case "$f" in
+        Image) b=out/build/arch/arm/boot/Image ;;
+        vmlinux) b=out/build/vmlinux ;;
+        *) b=out/$f ;;
+    esac
     if cmp -s "$a" "$b"; then echo "$f: identical"; else echo "$f: DIFFERS ($(cmp -l "$a" "$b" | wc -l) bytes)"; fi
 done
 if ! cmp -s out/first/vmlinux out/build/vmlinux; then

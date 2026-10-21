@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -24,6 +25,7 @@ jobs:
           name: kernel-${{ matrix.variant }}
           path: |
             out/zImage
+            out/pvrsrvkm_sgx540_120.ko
             out/config
             out/SHA256SUMS
   tuning:
