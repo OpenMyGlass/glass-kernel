@@ -22,6 +22,21 @@ To test ours, the stock module must never be loaded:
 3. `adb shell dmesg`: there must be no `PVRSRV_ERROR_DDK_VERSION_MISMATCH` and no `BUILD_MISMATCH` after `pvrsrvinit` runs.
 4. Check that SurfaceFlinger starts (`adb shell ps | grep surfaceflinger`, and the display works).
 
+## `tuned-stable` (3.4.113) boot checks — NOT RUN
+
+None of these has been run: no Glass is available. Only with the owner present, only with `fastboot boot` (RAM only, nothing written), and only after `tuned` has booted and passed the checks above, so that a failure points at the stable merge. A reboot returns to the stock kernel. Compare every result with the same check on `tuned`.
+
+1. **Version:** `adb shell cat /proc/version` shows `Linux version 3.4.113-gb6ea856-dirty…` (`-dirty` because the tuned patches are applied to the checkout).
+2. **GPU module:** the stock XE24 module does not load into this kernel: 59 CRCs of its imports differ even from `tuned`'s (see [`stable-merge.md`](stable-merge.md#the-gpu-module-pvrsrvkm)), so `insmod` fails with `disagrees about version of symbol`. So the boot image's ramdisk must load `out/pvrsrvkm_sgx540_120.ko` from the `kernel-tuned-stable` artifact, as described in the GPU module steps above. Then run those steps 2–4.
+3. **Pin muxing:** `adb shell dmesg | grep -iE 'multiple signal paths|could not set signal|mux'` gives the same lines as on `tuned` (upstream ba8f03aa changed pin-name matching; a static check found no effect on notle).
+4. **Watchdog:** the device stays up for at least 15 minutes with the screen on and with the screen off, with no reset (upstream dd7ad96c changed `omap_wdt_open()`). After any reset, read `/proc/last_kmsg` from the stock kernel.
+5. **Suspend and resume:** turn the screen off for 5 minutes, then wake it. `adb shell cat /sys/kernel/debug/suspend_stats` shows more successes and no new failures, and `dmesg` has no freezer errors (upstream 0629784c changed the CPU suspend path, and a2ca02f1 and 7655f855 changed how OOM-killed tasks are frozen).
+6. **Thermal:** `adb shell cat /sys/devices/system/cpu/cpu0/cpufreq/stats/time_in_state` read twice, 10 minutes apart under a steady load, shows the same duty-cycle pattern as on `tuned` (stable changes no thermal code; this checks that nothing else interferes).
+7. **Radios and storage:** Wi-Fi connects, Bluetooth pairs with the phone and stays connected for 10 minutes (stable changes the Bluetooth core), and `dmesg` has no `EXT4-fs error` and no `mmc` errors.
+8. **USB:** `adb` keeps working over a replug. `/sys/class/switch/usb_audio/state` exists (the `sound/usb/card.c` conflict kept it).
+
+If any check fails, record `dmesg`, `logcat` and the failing check in an issue, and go back to the stock kernel with a reboot.
+
 ## Debugging a boot with a normal USB cable
 
 No extra hardware is needed: everything below uses the micro-USB cable and `fastboot`/`adb`.

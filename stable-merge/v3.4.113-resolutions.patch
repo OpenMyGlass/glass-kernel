@@ -1,0 +1,37 @@
+diff --git a/net/netfilter/xt_socket.c b/net/netfilter/xt_socket.c
+index 051c0eb49..1c4906cce 100644
+--- a/net/netfilter/xt_socket.c
++++ b/net/netfilter/xt_socket.c
+@@ -299,13 +299,8 @@ xt_socket_get6_sk(const struct sk_buff *skb, struct xt_action_param *par)
+ 
+ 	} else if (tproto == IPPROTO_ICMPV6) {
+ 		if (extract_icmp6_fields(skb, thoff, &tproto, &saddr, &daddr,
+-<<<<<<< google/glass-omap-xrx13b
+-					 &sport, &dport))
+-			return NULL;
+-=======
+ 					 &sport, &dport, &ipv6_var))
+-			return false;
+->>>>>>> v3.4.113
++			return NULL;
+ 	} else {
+ 		return NULL;
+ 	}
+diff --git a/sound/usb/card.c b/sound/usb/card.c
+index 7a0dfc63e..7f3ae86f0 100644
+--- a/sound/usb/card.c
++++ b/sound/usb/card.c
+@@ -599,13 +599,8 @@ static void snd_usb_audio_disconnect(struct usb_device *dev,
+ 	up_write(&chip->shutdown_rwsem);
+ 
+ 	mutex_lock(&register_mutex);
+-<<<<<<< google/glass-omap-xrx13b
+-	chip->num_interfaces--;
+ 	switch_set_state(&sdev, STATE_DISCONNECTED);
+-	if (chip->num_interfaces <= 0) {
+-=======
+ 	if (!was_shutdown) {
+->>>>>>> v3.4.113
+ 		snd_card_disconnect(card);
+ 		/* release the pcm resources */
+ 		list_for_each(p, &chip->pcm_list) {

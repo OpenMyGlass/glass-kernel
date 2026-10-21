@@ -34,6 +34,8 @@ After the kernel (`zImage`, `modules_prepare`), `scripts/build.sh` copies the DD
 
 Config changes that alter structures used by the module are possible, because the module is rebuilt with the kernel. Each such change must re-run `compare_ko.py` and expect CRC differences only where intended.
 
+On `tuned-stable` (3.4.113), 59 of the module's 165 CRCs differ from `tuned`'s, with the same imported symbols: see [`stable-merge.md`](stable-merge.md#the-gpu-module-pvrsrvkm).
+
 ## Open items
 
 - Compare the DDK build options of the stock module with ours (offline). `PLATFORM_VERSION=4.0` in `scripts/build.sh` selects ICS-era options that are not yet checked.
