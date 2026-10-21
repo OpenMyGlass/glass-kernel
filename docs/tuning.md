@@ -53,9 +53,34 @@ adb shell sh /data/local/tmp/omg-tune.sh status
 
 `VARIANT=tuned scripts/build-in-container.sh`, built by CI as the `kernel-tuned` artifact. It differs from stock only in `configs/tuned.config`:
 - the default I/O scheduler is deadline;
-- two debug-only statistics are off.
+- two debug-only statistics are off;
+- the debugging and tracing options below, which cost time at runtime, are off.
 
-`PM_DEBUG` stays on, because OMAP's off-mode switches live under it.
+| Option off | Runtime cost in stock |
+|---|---|
+| `DEBUG_SPINLOCK` | checks owner and magic on every spinlock lock and unlock, and makes `spinlock_t` larger |
+| `DEBUG_MUTEXES` | checks every mutex lock and unlock, and disables mutex spinning (`MUTEX_SPIN_ON_OWNER` comes back on) |
+| `DEBUG_RT_MUTEXES` | checks every rt-mutex operation (futex priority inheritance, used by Android) |
+| `DEBUG_PI_LIST` | walks and checks the priority list on every rt-mutex enqueue and dequeue |
+| `IRQSOFF_TRACER` | hooks every interrupt disable and enable (`TRACE_IRQFLAGS`), even when not tracing |
+| `FUNCTION_TRACER` | builds the kernel with `-pg`: an mcount call in every function prologue |
+| `FUNCTION_GRAPH_TRACER` | depends on `FUNCTION_TRACER`; adds return hooks |
+| `FUNCTION_PROFILER` | depends on `FUNCTION_TRACER`; per-function hit counters |
+| `PERSISTENT_TRACER` | Android's last-function-before-reset tracer; it selects `FUNCTION_TRACER`, so it has to go too. Notle registers no device for it, so it is unused in stock |
+| `SCHEDSTATS` | updates scheduler statistics on every enqueue, dequeue and context switch |
+| `TIMER_STATS` | records the caller of every timer start (`/proc/timer_stats`) |
+| `KPROBES` | keeps the kprobe hooks in the exception and fault paths; nothing on Glass sets probes |
+| `OPROFILE` | profiler driver and its hooks; Android uses `perf` events, which stay |
+
+Side effects Kconfig resolves on its own: `MUTEX_SPIN_ON_OWNER` turns on (it needs `DEBUG_MUTEXES` off), `SPLIT_PTLOCK_CPUS` goes from 999999 to 4 (split page-table locks need `DEBUG_SPINLOCK` off), and `KRETPROBES` and `KPROBE_EVENT` go with `KPROBES`. With no function tracer left, nothing selects `TRACING` any more, so the fragment turns on `ENABLE_DEFAULT_TRACERS` and checks that `EVENT_TRACING` and `TRACEPOINTS` stay on.
+
+Debug options that stay on:
+- `PM_DEBUG`, because OMAP's off-mode switches live under it;
+- `DEBUG_FS`, because power and thermal tools read it;
+- `FTRACE`, `TRACEPOINTS` and `EVENT_TRACING`, because Android's `atrace` and `systrace` use event tracing, which costs nothing while it is off;
+- `DEBUG_KERNEL` and `KALLSYMS`, which only gate other options and give readable oopses.
+
+Size, from the CI artifacts of run 39650912927: the `tuned` `zImage` is 4,839,160 bytes, against 5,075,816 for `stock` (236,656 bytes, 4.7%, smaller).
 
 ## Deliberately not done
 - **Undervolting:** SmartReflex 1.5 already trims voltages, and OMAP4 kernels that undervolted saw random reboots for little gain.
