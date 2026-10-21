@@ -6,7 +6,8 @@ set -eu
 cd "$(dirname "$0")/.."
 engine=$(command -v docker || command -v podman || true)
 [ -n "$engine" ] || { echo "error: docker or podman required" >&2; exit 1; }
-# The DDK is fetched on the host: the container's git 1.9 has no sparse-checkout or partial clone.
+# fetch-pvr.sh runs on the host and needs git 2.25 or newer (sparse-checkout, partial clone);
+# the container's git 1.9 has neither.
 scripts/fetch-pvr.sh
 "$engine" build --platform linux/amd64 -t glass-kernel-build .
 "$engine" run --rm --platform linux/amd64 \
