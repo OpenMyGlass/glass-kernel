@@ -2,7 +2,7 @@ name: repro
 on:
   workflow_dispatch:
   pull_request:
-    paths: [scripts/build.sh, scripts/source.env, scripts/fetch-pvr.sh, scripts/check-reproducible.sh, Dockerfile, .github/workflows/repro.yml, "patches/**", "configs/**"]
+    paths: [scripts/build.sh, scripts/source.env, scripts/variant.sh, scripts/fetch-source.sh, scripts/fetch-pvr.sh, scripts/check-reproducible.sh, Dockerfile, .github/workflows/repro.yml, "patches/**", "configs/**"]
 permissions:
   contents: read
 jobs:
@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 90
     strategy:
       matrix:
-        variant: [stock, tuned]
+        variant: [stock, tuned, tuned-stable]
     steps:
       - uses: actions/checkout@v4
         with:

@@ -5,10 +5,12 @@ set -eu
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 . scripts/source.env
+# shellcheck disable=SC1091
+. scripts/variant.sh
 
 # Never let git fall through to this repository when src/ is not its own checkout.
-if [ ! -d src/.git ] || [ "$(git -C src rev-parse HEAD)" != "$COMMIT" ]; then
-    echo "error: src/ is not a checkout of $COMMIT; run scripts/fetch-source.sh" >&2
+if [ ! -d src/.git ] || [ "$(git -C src rev-parse HEAD)" != "$SRC_COMMIT" ]; then
+    echo "error: src/ is not a checkout of $SRC_COMMIT; run scripts/fetch-source.sh" >&2
     exit 1
 fi
 # pvr/ is fetched by a newer git than the container's, which cannot open it: read HEAD directly.
@@ -17,22 +19,17 @@ if [ "$(cat pvr/.git/HEAD 2>/dev/null || true)" != "$PVR_COMMIT" ]; then
     exit 1
 fi
 
-VARIANT=${VARIANT:-stock}
-case "$VARIANT" in
-    stock|tuned) ;;
-    *) echo "error: VARIANT must be stock or tuned" >&2; exit 1 ;;
-esac
-
 OUT=$PWD/out
 BUILD=$PWD/out/build
 rm -rf "$BUILD"
 mkdir -p "$BUILD"
 
-# Apply our patches to a pristine tree: patches/ for every variant, then patches/<variant>/.
-git -C src checkout -q --force "$COMMIT"
+# Apply our patches to a pristine tree: patches/ for every variant, then patches/tuned/
+# for tuned and tuned-stable.
+git -C src checkout -q --force "$SRC_COMMIT"
 git -C src clean -qfdx
 patch_dirs=patches
-if [ "$VARIANT" = tuned ]; then patch_dirs="patches patches/tuned"; fi
+if [ "$TUNED" = yes ]; then patch_dirs="patches patches/tuned"; fi
 for d in $patch_dirs; do
     for p in "$d"/*.patch; do
         [ -e "$p" ] || continue
@@ -57,7 +54,7 @@ export KCFLAGS="-Wno-builtin-macro-redefined -include $OUT/build-date.h"
 make -C src O="$BUILD" notle_defconfig
 # scripts/config in 3.4 takes option names without the CONFIG_ prefix.
 opt_name() { echo "${1#CONFIG_}"; }
-if [ "$VARIANT" = tuned ]; then
+if [ "$TUNED" = yes ]; then
     # Apply the fragment, let Kconfig resolve dependencies, then check nothing was dropped.
     grep -v '^#\( \|$\)' configs/tuned.config | grep . > "$BUILD/fragment" || true
     while read -r line; do
