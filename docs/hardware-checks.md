@@ -45,10 +45,19 @@ None of these has been run: no Glass is available. Only with the owner present, 
 2. **Default:** `adb shell cat /sys/devices/system/cpu/cpufreq/interactive/input_boost` prints `1`, and `adb shell sh /data/local/tmp/omg-tune.sh status` lists `input_boost: 1`.
 3. **It fires on touch, and only then:** with tracing (`echo 1 > /sys/kernel/debug/tracing/events/cpufreq_interactive/cpufreq_interactive_boost/enable`, then `cat /sys/kernel/debug/tracing/trace_pipe`), swiping gives `cpufreq_interactive_boost: input` lines, and there are none, or only occasional ones, with the finger off the touchpad for 30 s (the F11 driver also reports a cover switch, `SW_CAMERA_LENS_COVER`, and each of its reports ends with `SYN_REPORT` too; record how many). Turn the event off afterwards.
 4. **The knob turns it off:** `omg-tune.sh input-boost off`; swiping gives no more `input` lines; `input-boost on` brings them back.
-5. **Frequency stays bounded:** while swiping, `scaling_cur_freq` never exceeds `scaling_max_freq` or `hispeed_freq`, also after `omg-tune.sh cool` (600 MHz hispeed, 800 MHz max).
+5. **Frequency stays bounded:** while swiping, `scaling_cur_freq` never exceeds `scaling_max_freq` or `hispeed_freq`, also after `omg-tune.sh cool` (800 MHz hispeed and max).
 6. **Effect:** `cpu0/cpufreq/stats/time_in_state` read before and after 30 s of steady swiping through cards, once with `input_boost` 1 and once with 0: the time at `hispeed_freq` grows with 1. Note any visible difference in how quickly the cards respond.
 7. **Already boosted by the system?** With `input_boost` 0, trace `cpufreq_interactive_boost` while swiping: `pulse` lines mean XE24's power HAL already writes `boostpulse` on touch, and the kernel boost then mostly duplicates it. Record which.
 8. **Suspend:** screen off for 5 minutes, then wake with a tap: the touchpad still works and `dmesg` has no `cpufreq_interactive` or `rmi` errors.
+
+## `hispeed_freq` ceiling (`tuned`, `tuned-stable`; `0009`) — NOT RUN
+
+None of these has been run: no Glass is available. Only with the owner present, only with `fastboot boot` (RAM only, nothing written), after the boot checks above pass on the same kernel. A reboot returns to the stock kernel and its defaults. Background in [`tuning.md`](tuning.md#hispeed_freq-as-a-ceiling-patchestuned0009). The test writes only governor tunables, all below the stock values, never above 1008 MHz.
+
+1. **Before (stock kernel, read-only):** on stock XE24, `omg-tune.sh status` after boot and after a screen off/on cycle. Record `hispeed_freq` and `scaling_max_freq`: if the system writes a `hispeed_freq` below the maximum, stock XE24 itself is affected by the drop to the lowest speed.
+2. **Clamp:** on the `tuned` kernel, `echo 600000 > /sys/devices/system/cpu/cpufreq/interactive/hispeed_freq` (keep `scaling_max_freq` at 1008000), then run a steady CPU load on both cores (for example two `adb shell 'while :; do :; done' &`) for 30 s. `scaling_cur_freq`, read every second, stays at 600000; `time_in_state` grows at 600 MHz, not at 300 MHz and not above 600 MHz. Stop the load and write `hispeed_freq` back to 1008000 (or reboot).
+3. **For comparison, the stock build** (only if the owner wants to see the bug): the same steps on the `stock` kernel show `scaling_cur_freq` falling to 300000 under the load. This is the stock behaviour, run only from RAM.
+4. **Profiles:** after `omg-tune.sh cool`, `status` shows `hispeed_freq: 800000` and `scaling_max_freq: 800000`; after `omg-tune.sh stock`, both are 1008000.
 
 ## Debugging a boot with a normal USB cable
 

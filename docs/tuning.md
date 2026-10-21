@@ -9,6 +9,7 @@ Nothing here has been measured on hardware yet. Every profile is reversible: a r
 From the source (commit `989d925`):
 - **CPU frequencies:** 300, 600, 800 and 1008 MHz. 1008 MHz is the "NITRO" point at 1.388 V.
 - **Governor:** `interactive`. It jumps to the maximum frequency at 99% load (`go_hispeed_load`) and stays at least 80 ms (`min_sample_time`).
+- **`hispeed_freq` is a ceiling on Glass.** Google's commit 82ecdfc2408b (see [below](#hispeed_freq-as-a-ceiling-patchestuned0009)) makes the governor never set a speed above `hispeed_freq`, unlike AOSP's. On the stock kernel, a CPU target above `hispeed_freq` is ignored, and if every target is above it the CPU drops to its lowest speed. The default `hispeed_freq` is the maximum (1008 MHz), so stock XE24 never hits this; any lower value does.
 - **Thermal throttling** (`board-notle.c`, by PCB temperature):
 
 | PCB temperature | Top / cooling frequency | Time at the top frequency per 20 s cycle |
@@ -29,18 +30,21 @@ So above about 35 °C, which is normal when Glass is worn, the CPU is already li
 | Value | stock | balanced | cool |
 |---|---|---|---|
 | `scaling_max_freq` (kHz) | 1008000 | 1008000 | 800000 |
-| `hispeed_freq` (kHz) | 1008000 | 600000 | 600000 |
-| `go_hispeed_load` (%) | 99 | 90 | 95 |
-| `target_loads` (%) | 90 | 85 | 85 |
-| `above_hispeed_delay` (µs) | 20000 | `40000 800000:60000` | `60000 800000:80000` |
+| `hispeed_freq` (kHz) | 1008000 | 1008000 | 800000 |
+| `go_hispeed_load` (%) | 99 | 99 | 99 |
+| `target_loads` (%) | 90 | `90 800000:95` | 90 |
+| `above_hispeed_delay` (µs) | 20000 | 20000 | 20000 |
 | `min_sample_time` (µs) | 80000 | 60000 | 60000 |
 | `timer_rate` (µs) | 20000 | 20000 | 30000 |
 | eMMC I/O scheduler | cfq | deadline | deadline |
 
-- **balanced** keeps bursts up to 1008 MHz, but goes to 600 MHz first instead of straight to the maximum.
-- `above_hispeed_delay` takes a per-frequency list on the `tuned` build (see the backports below): the first value applies from `hispeed_freq` (600 MHz in these profiles) up to the next listed step, the second at 800 MHz and above. In `cool` (max 800 MHz), 800 MHz is the top step, so the `800000:80000` entry never applies and only `60000` matters. On a kernel without per-frequency support, the profile writes only the first value.
+- Every profile sets `hispeed_freq` equal to `scaling_max_freq`. Because `hispeed_freq` is the governor's ceiling on Glass, a lower value would cap the speed, and on any kernel without `0009` (stock XE24 and the `stock` build) it would make the CPU drop to 300 MHz under high load. A frequency cap is set with `scaling_max_freq` instead, which works the same on every kernel. When switching profiles, the script writes `hispeed_freq` before `scaling_max_freq` when raising and after it when lowering, so `hispeed_freq` is never below the maximum, even for a moment. If `scaling_max_freq` cannot be lowered, `hispeed_freq` is left alone and the failure is reported.
+- So `above_hispeed_delay` has no effect in these profiles (there is no speed above `hispeed_freq`), and they write the stock value.
+- No profile goes to a higher speed than `stock` would at the same load: `go_hispeed_load` stays 99, and the target loads are 90 or more.
+- **balanced** keeps bursts up to 1008 MHz, but needs more load to get there: at 800 MHz and above the target load is 95% instead of 90%, so it moves from 800 MHz to 1008 MHz only above 95% load at 800 MHz (or at 99% load, from any speed, like stock). It also holds a speed for 60 ms instead of 80 ms before dropping.
 - The profiles do not set `io_is_busy` or `input_boost`; `status` shows them when present. `omg-tune.sh input-boost on|off` sets `input_boost` on its own.
-- **cool** never uses the 1.388 V NITRO point. It mostly differs from stock when Glass is cool, for example right after waking up.
+- **cool** never uses the 1.388 V NITRO point: its maximum is 800 MHz. It mostly differs from stock when Glass is cool, for example right after waking up. It also samples load every 30 ms instead of 20 ms.
+- Before this change, `balanced` and `cool` set `hispeed_freq` to 600 MHz. Because of the ceiling, they never ran above 600 MHz (not 1008 or 800 MHz as described then), and under high load they could fall to 300 MHz instead.
 
 To try one over adb (needs root adb, from glass-rom's insecure boot image):
 
@@ -58,7 +62,8 @@ adb shell sh /data/local/tmp/omg-tune.sh status
 - two debug-only statistics are off;
 - the debugging and tracing options below, which cost time at runtime, are off;
 - the interactive governor has two later AOSP features, backported with their upstream follow-up fixes (see below);
-- the interactive governor boosts to `hispeed_freq` on touchpad input (see [Touchpad input boost](#touchpad-input-boost-patchestuned00060008)).
+- the interactive governor boosts to `hispeed_freq` on touchpad input (see [Touchpad input boost](#touchpad-input-boost-patchestuned00060008));
+- a CPU target above `hispeed_freq` runs at `hispeed_freq` instead of dropping to the lowest speed (see [`hispeed_freq` as a ceiling](#hispeed_freq-as-a-ceiling-patchestuned0009)).
 
 | Option off | Runtime cost in stock |
 |---|---|
@@ -107,7 +112,7 @@ What it does: on each input report (`SYN_REPORT`) from a matching device, every 
 
 How it matches the touchpad: Glass's touchpad is a Synaptics TM2240 (`rmi_i2c` at 0x20 on I2C bus 3), driven by RMI4 F11 as input device `sensor00fn11`. It reports `EV_ABS` with `ABS_MT_POSITION_X/Y` (multi-touch protocol A) and has no `BTN_TOUCH`, `ABS_X` or `ABS_Y`. So upstream's "touchpad" entry (`BTN_TOUCH` + `ABS_X/Y`, a single-touch touchpad) does not match it, but the "multi-touch touchscreen" entry (`EV_ABS` + `ABS_MT_POSITION_X/Y`) does, and the match table needs no change. No other input driver built for notle has those axes (the LTR-506 light and proximity sensor uses `ABS_MISC` and `ABS_DISTANCE`; the MPU-9150 is an IIO device). A USB HID or uinput device with multi-touch axes would match too (Bluetooth HID, `BT_HIDP`, and `UHID` are not built). At boot, `dmesg` shows `cpufreq_interactive_input_connect: connect to sensor00fn11`.
 
-Limits: the boost never goes above `hispeed_freq`. Whatever `hispeed_freq` is, `omap_target()` picks only table frequencies within `scaling_min_freq`–`scaling_max_freq`, and `omap_cpufreq_scale()` clamps to the thermal limit, so it cannot reach a frequency that the governor could not already select, and nothing above the 1008 MHz OPP. With the kernel default `hispeed_freq` (the policy maximum, 1008 MHz, also what the `stock` profile writes), a touch goes to 1008 MHz when the thermal table allows; `balanced` and `cool` make it 600 MHz.
+Limits: the boost never goes above `hispeed_freq`. Whatever `hispeed_freq` is, `omap_target()` picks only table frequencies within `scaling_min_freq`–`scaling_max_freq`, and `omap_cpufreq_scale()` clamps to the thermal limit, so it cannot reach a frequency that the governor could not already select, and nothing above the 1008 MHz OPP. With the kernel default `hispeed_freq` (the policy maximum, 1008 MHz, also what the `stock` and `balanced` profiles write), a touch goes to 1008 MHz when the thermal table allows; `cool` makes it 800 MHz.
 
 Known upstream limits, kept as they were: the handler has a single work item to open devices, so if two matching devices connect at the same moment (for example a USB HID touchscreen already plugged in when the governor starts), only the second is opened, and unplugging the first later underflows its open count; a device removed before its open work has run leaves the work with a freed handle; a failed `input_open_device()` leaks the handle. On Glass only the touchpad matches, and it is never removed.
 
@@ -122,6 +127,19 @@ Build results, from CI run 39683348523 (repro run 39683348561: `identical` for `
 The GPU modules are byte-identical to those of main (run 39671222156), and `scripts/compare_ko.py` reports `modules match` for both: the patches export nothing and change no structure the module uses, so no CRC changes.
 
 Size, from the CI artifacts of run 39650912927 (before the patches): the `tuned` `zImage` is 4,839,160 bytes, against 5,075,816 for `stock` (236,656 bytes, 4.7%, smaller).
+
+### `hispeed_freq` as a ceiling (`patches/tuned/0009`)
+
+Glass's interactive governor differs from AOSP's in one line of the speed-change task, which picks the speed of the policy (both CPUs share one) from the per-CPU targets. AOSP takes the highest target. Glass takes the highest target **at or below `hispeed_freq`**. The line comes from commit `82ecdfc2408b` in `glass-omap-xrx13b`, "Interactive Governor: Add checks to prevent deadlock in worker" (Kai Yick, Google, 2013-11-13, `Change-Id: Ib1d938ae0d47b5ffad1957438765880a0289c5ba`). The rest of that commit adds error checks to `choose_freq()`, 64-bit load accounting and timer rearming under the load lock; its message does not say why the `hispeed_freq` term is there, and AOSP never had it.
+
+Effects on any kernel built from that source without `0009` (stock XE24, the `stock` build):
+- the governor never sets a speed above `hispeed_freq`, whatever `target_loads` and `above_hispeed_delay` ask for;
+- a CPU whose target is above `hispeed_freq` is ignored, so the policy runs at the other CPU's lower target;
+- if every target is above `hispeed_freq`, the policy is set to 0 kHz with `CPUFREQ_RELATION_H`, and `cpufreq_frequency_table_target()` then picks the lowest table frequency within the policy (300 MHz by default), exactly when load is highest. The per-CPU timer keeps the target it chose and does not queue another change while the target stays the same, so the CPU can stay at 300 MHz for a while.
+
+With `hispeed_freq` at the maximum (the kernel default), no target can be above it and nothing changes. So this matters only when something writes a lower `hispeed_freq`, as the old `balanced` and `cool` profiles did.
+
+`0009` (OpenMyGlass) keeps the ceiling, since Google may have meant it (for example to limit heat), and counts a target above `hispeed_freq` as `hispeed_freq`. Every speed it sets is still at or below `hispeed_freq`, as before, so no frequency goes higher than the stock code allows; it only removes the drop to the lowest speed. The profiles do not rely on it: they keep `hispeed_freq` at the maximum, so they behave the same on every kernel.
 
 ### `tuned-stable`
 

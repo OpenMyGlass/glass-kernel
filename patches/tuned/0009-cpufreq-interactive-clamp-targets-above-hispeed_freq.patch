@@ -1,0 +1,91 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: OpenMyGlass <openmyglass@users.noreply.github.com>
+Date: Thu, 22 Oct 2026 00:33:16 +0200
+Subject: [PATCH] cpufreq: interactive: clamp targets above hispeed_freq
+ instead of dropping them
+
+Glass's kernel has a change in the speed-change task that AOSP does not
+have: commit 82ecdfc2408b ("Interactive Governor: Add checks to prevent
+deadlock in worker", Kai Yick, Google, November 2013) made the loop over
+the policy's CPUs keep only targets at or below hispeed_freq. Its message
+does not say why. The effects:
+
+- hispeed_freq is the highest speed the governor ever sets, whatever
+  above_hispeed_delay and target_loads ask for;
+- a CPU whose target is above hispeed_freq is ignored, so the policy
+  runs at the other CPU's lower target;
+- when every CPU's target is above hispeed_freq, max_freq stays 0 and
+  __cpufreq_driver_target(policy, 0, CPUFREQ_RELATION_H) selects the
+  lowest table frequency within the policy (300 MHz by default),
+  exactly when load is highest. The timer then sees the target it
+  already chose and does not queue another change, so the speed can
+  stay there until the target changes.
+
+With the default hispeed_freq (the policy maximum, 1008 MHz on Glass)
+no target can be above it, so stock behaviour is not affected. Any
+lower hispeed_freq hits the last two cases.
+
+Keep the ceiling, which may be intended (for example for heat), but
+count a target above hispeed_freq as hispeed_freq. Every frequency set
+stays at or below hispeed_freq, as before, and the policy no longer
+drops to its lowest speed under load. hispeed_freq is read once per
+policy so that every CPU is compared with the same value.
+
+This change is licensed under GPL-2.0-only, like the file it changes.
+---
+ Documentation/cpu-freq/governors.txt  |  2 ++
+ drivers/cpufreq/cpufreq_interactive.c | 17 ++++++++++++++---
+ 2 files changed, 16 insertions(+), 3 deletions(-)
+
+diff --git a/Documentation/cpu-freq/governors.txt b/Documentation/cpu-freq/governors.txt
+index 3e3e8e9..60d0ade 100644
+--- a/Documentation/cpu-freq/governors.txt
++++ b/Documentation/cpu-freq/governors.txt
+@@ -228,6 +228,8 @@ when CPU load hits the value specified in go_hispeed_load.  If load
+ stays high for the amount of time specified in above_hispeed_delay,
+ then speed may be bumped higher.  Default is the maximum speed
+ allowed by the policy at governor initialization time.
++In this kernel, hispeed_freq is also the highest speed the governor
++sets: a CPU whose target is above it runs at hispeed_freq.
+ 
+ go_hispeed_load: The CPU load at which to ramp to hispeed_freq.
+ Default is 99%.
+diff --git a/drivers/cpufreq/cpufreq_interactive.c b/drivers/cpufreq/cpufreq_interactive.c
+index a1f0d08..7f08489 100644
+--- a/drivers/cpufreq/cpufreq_interactive.c
++++ b/drivers/cpufreq/cpufreq_interactive.c
+@@ -561,6 +561,7 @@ static int cpufreq_interactive_speedchange_task(void *data)
+ 		for_each_cpu(cpu, &tmp_mask) {
+ 			unsigned int j;
+ 			unsigned int max_freq = 0;
++			unsigned int ceiling;
+ 
+ 			pcpu = &per_cpu(cpuinfo, cpu);
+ 			if (!down_read_trylock(&pcpu->enable_sem))
+@@ -570,13 +571,23 @@ static int cpufreq_interactive_speedchange_task(void *data)
+ 				continue;
+ 			}
+ 
++			/*
++			 * hispeed_freq is the highest speed set here. A target
++			 * above it counts as hispeed_freq, instead of being
++			 * left out: when every CPU's target was above it,
++			 * max_freq stayed 0 and the policy dropped to its
++			 * lowest speed.
++			 */
++			ceiling = hispeed_freq;
++
+ 			for_each_cpu(j, pcpu->policy->cpus) {
+ 				struct cpufreq_interactive_cpuinfo *pjcpu =
+ 					&per_cpu(cpuinfo, j);
++				unsigned int freq = min(pjcpu->target_freq,
++							ceiling);
+ 
+-				if ((pjcpu->target_freq > max_freq) &&
+-					(pjcpu->target_freq <= hispeed_freq))
+-					max_freq = pjcpu->target_freq;
++				if (freq > max_freq)
++					max_freq = freq;
+ 			}
+ 
+ 			if (max_freq != pcpu->policy->cur)
