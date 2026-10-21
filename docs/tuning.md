@@ -32,12 +32,14 @@ So above about 35 °C, which is normal when Glass is worn, the CPU is already li
 | `hispeed_freq` (kHz) | 1008000 | 600000 | 600000 |
 | `go_hispeed_load` (%) | 99 | 90 | 95 |
 | `target_loads` (%) | 90 | 85 | 85 |
-| `above_hispeed_delay` (µs) | 20000 | 40000 | 60000 |
+| `above_hispeed_delay` (µs) | 20000 | `40000 800000:60000` | `60000 800000:80000` |
 | `min_sample_time` (µs) | 80000 | 60000 | 60000 |
 | `timer_rate` (µs) | 20000 | 20000 | 30000 |
 | eMMC I/O scheduler | cfq | deadline | deadline |
 
 - **balanced** keeps bursts up to 1008 MHz, but goes to 600 MHz first instead of straight to the maximum.
+- `above_hispeed_delay` takes a per-frequency list on the `tuned` build (see the backports below): the first value applies below 800 MHz, the second at 800 MHz and above. On a kernel without per-frequency support, the profile writes only the first value.
+- The profiles do not set `io_is_busy`; `status` shows it when present.
 - **cool** never uses the 1.388 V NITRO point. It mostly differs from stock when Glass is cool, for example right after waking up.
 
 To try one over adb (needs root adb, from glass-rom's insecure boot image):
@@ -108,6 +110,8 @@ Then, for each profile, starting at full charge and room temperature, run three 
 1. idle with the screen off;
 2. turn-by-turn navigation from OpenMyGlass with the screen on;
 3. video recording.
+
+One more axis separates the config effect from the profile effect: the `stock` build against the `tuned` build, each with the `stock` profile, in the same three scenarios. Later, optionally, `io_is_busy` 1 against 0 on the `tuned` build.
 
 Record, every 30 s, over adb:
 - **battery:** `cat /sys/class/power_supply/*/capacity` and `current_now` where available;
