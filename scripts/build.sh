@@ -3,6 +3,7 @@
 # src/ is a managed checkout: local edits there are discarded on every build.
 set -eu
 cd "$(dirname "$0")/.."
+# shellcheck disable=SC1091
 . scripts/source.env
 
 # Never let git fall through to this repository when src/ is not its own checkout.
@@ -37,9 +38,10 @@ for p in patches/*.patch; do
     git -C src apply "../$p"
 done
 
+KBUILD_BUILD_TIMESTAMP=$(git -C src log -1 --format=%cD)
 export ARCH=arm CROSS_COMPILE=arm-linux-gnueabi- \
     KBUILD_BUILD_USER=openmyglass KBUILD_BUILD_HOST=build KBUILD_BUILD_VERSION=1 \
-    KBUILD_BUILD_TIMESTAMP="$(git -C src log -1 --format=%cD)"
+    KBUILD_BUILD_TIMESTAMP
 # Some drivers (bcmdhd) embed __DATE__/__TIME__; pin them to the source commit date so
 # two builds of the same commit are bit-identical. GCC 4.7 predates SOURCE_DATE_EPOCH.
 commit_epoch=$(git -C src log -1 --format=%ct)

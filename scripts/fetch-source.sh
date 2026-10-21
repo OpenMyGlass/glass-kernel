@@ -3,6 +3,7 @@
 set -eu
 
 cd "$(dirname "$0")/.."
+# shellcheck disable=SC1091
 . scripts/source.env
 
 if [ ! -d src/.git ]; then
