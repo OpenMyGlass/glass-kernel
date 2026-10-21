@@ -93,7 +93,8 @@ case "${1:-}" in
     input-boost)
         # Profiles leave input_boost alone; this sets it on its own. Kernels without it
         # (stock XE24, the stock build) report the file as missing and exit 1.
-        case "${2:-}" in
+        [ $# -eq 2 ] || usage
+        case "$2" in
             on) put "$GOV/input_boost" 1 ;;
             off) put "$GOV/input_boost" 0 ;;
             *) usage ;;

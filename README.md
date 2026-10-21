@@ -4,7 +4,7 @@ Kernel builds for Google Glass Explorer Edition on its final firmware, XE24 (TI 
 
 ## Status
 
-Phase 6: touchpad input boost in the `tuned` and `tuned-stable` builds (the interactive governor raises the CPU to `hispeed_freq` on touchpad input; `input_boost` turns it off). Not run on hardware. See [`docs/tuning.md`](docs/tuning.md#touchpad-input-boost-patchestuned0006-0007).
+Phase 6: touchpad input boost in the `tuned` and `tuned-stable` builds (the interactive governor raises the CPU to `hispeed_freq` on touchpad input; `input_boost` turns it off). Not run on hardware. See [`docs/tuning.md`](docs/tuning.md#touchpad-input-boost-patchestuned00060008).
 
 Phase 5: a `tuned-stable` variant, the `tuned` build on Linux 3.4.113, the final linux-3.4.y release (1450 upstream fixes merged into Google's source). Not run on hardware. See [`docs/stable-merge.md`](docs/stable-merge.md).
 

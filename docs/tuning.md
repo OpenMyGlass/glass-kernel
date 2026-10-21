@@ -58,7 +58,7 @@ adb shell sh /data/local/tmp/omg-tune.sh status
 - two debug-only statistics are off;
 - the debugging and tracing options below, which cost time at runtime, are off;
 - the interactive governor has two later AOSP features, backported with their upstream follow-up fixes (see below);
-- the interactive governor boosts to `hispeed_freq` on touchpad input (see [Touchpad input boost](#touchpad-input-boost-patchestuned0006-0007)).
+- the interactive governor boosts to `hispeed_freq` on touchpad input (see [Touchpad input boost](#touchpad-input-boost-patchestuned00060008)).
 
 | Option off | Runtime cost in stock |
 |---|---|
@@ -95,18 +95,21 @@ The two new knobs, under `/sys/devices/system/cpu/cpufreq/interactive/`:
 
 `above_hispeed_delay` and `target_loads` read back with a trailing space (`20000 `). The kernel rejects that string, so trim it before writing a saved value back.
 
-### Touchpad input boost (`patches/tuned/0006`, `0007`)
+### Touchpad input boost (`patches/tuned/0006`–`0008`)
 
 - `0006`: AOSP `kernel/common` android-3.4 commit 7820a652 "cpufreq: interactive: Boost frequency on touchscreen input" (Todd Poynor, 2012). It is in Glass's own history: AOSP removed it again in July 2012 (4e27eb56, "now handled in userspace Power HAL instead"), and TI's copy of that removal (a021a1c1) is in `glass-omap-xrx13b`. The patch brings back the handler as it was just before the removal, with the later AOSP changes 9fb15315, 2e739a07 and a9a7eb00 that it had by then. The `android-3.0` copy of 7820a652 is 2e21b68c.
 - `0007` (OpenMyGlass): `input_boost` defaults to 1.
+- `0008` (OpenMyGlass): the last governor stop unregisters the input handler only if registering it succeeded (it can fail with `-EINTR`), instead of removing a handler that was never added.
 
 The knob is `/sys/devices/system/cpu/cpufreq/interactive/input_boost`: `1` (the default on `tuned` and `tuned-stable`) or `0` (off). The `stock` build and stock XE24 have no such file.
 
-What it does: on each input report (`SYN_REPORT`) from a matching device, every online CPU below `hispeed_freq` is raised to it, and the floor is set to `hispeed_freq`. So the speed stays at `hispeed_freq` or above for `min_sample_time` after the **last** report (80 ms by kernel default, 60 ms in `balanced` and `cool`), then drops by load as usual. `boostpulse_duration` does not apply to it. A finger on the touchpad sends reports continuously (the rate is set by the controller and not measured yet), so the boost lasts for the touch plus `min_sample_time`.
+What it does: on each input report (`SYN_REPORT`) from a matching device, every online CPU below `hispeed_freq` is raised to it, and the floor is set to `hispeed_freq`. So the speed stays at `hispeed_freq` or above for at least `min_sample_time` after the **last** report (80 ms by kernel default, 60 ms in `balanced` and `cool`), then drops by load at the next timer sample (up to `timer_rate` later, or later still if the CPU is idle, since the timer is deferrable). `boostpulse_duration` does not apply to it. A finger on the touchpad sends reports continuously (the rate is set by the controller and not measured yet), so the boost lasts for the touch plus `min_sample_time`.
 
-How it matches the touchpad: Glass's touchpad is a Synaptics TM2240 (`rmi_i2c` at 0x20 on I2C bus 3), driven by RMI4 F11 as input device `sensor00fn11`. It reports `EV_ABS` with `ABS_MT_POSITION_X/Y` (multi-touch protocol A) and has no `BTN_TOUCH`, `ABS_X` or `ABS_Y`. So upstream's "touchpad" entry (`BTN_TOUCH` + `ABS_X/Y`, a single-touch touchpad) does not match it, but the "multi-touch touchscreen" entry (`EV_ABS` + `ABS_MT_POSITION_X/Y`) does, and the match table needs no change. No other input driver built for notle has those axes (the LTR-506 light and proximity sensor uses `ABS_MISC` and `ABS_DISTANCE`; the MPU-9150 is an IIO device). A USB or Bluetooth HID, or uinput, device with multi-touch axes would match too. At boot, `dmesg` shows `cpufreq_interactive_input_connect: connect to sensor00fn11`.
+How it matches the touchpad: Glass's touchpad is a Synaptics TM2240 (`rmi_i2c` at 0x20 on I2C bus 3), driven by RMI4 F11 as input device `sensor00fn11`. It reports `EV_ABS` with `ABS_MT_POSITION_X/Y` (multi-touch protocol A) and has no `BTN_TOUCH`, `ABS_X` or `ABS_Y`. So upstream's "touchpad" entry (`BTN_TOUCH` + `ABS_X/Y`, a single-touch touchpad) does not match it, but the "multi-touch touchscreen" entry (`EV_ABS` + `ABS_MT_POSITION_X/Y`) does, and the match table needs no change. No other input driver built for notle has those axes (the LTR-506 light and proximity sensor uses `ABS_MISC` and `ABS_DISTANCE`; the MPU-9150 is an IIO device). A USB HID or uinput device with multi-touch axes would match too (Bluetooth HID, `BT_HIDP`, and `UHID` are not built). At boot, `dmesg` shows `cpufreq_interactive_input_connect: connect to sensor00fn11`.
 
 Limits: the boost never goes above `hispeed_freq`. Whatever `hispeed_freq` is, `omap_target()` picks only table frequencies within `scaling_min_freq`–`scaling_max_freq`, and `omap_cpufreq_scale()` clamps to the thermal limit, so it cannot reach a frequency that the governor could not already select, and nothing above the 1008 MHz OPP. With the kernel default `hispeed_freq` (the policy maximum, 1008 MHz, also what the `stock` profile writes), a touch goes to 1008 MHz when the thermal table allows; `balanced` and `cool` make it 600 MHz.
+
+Known upstream limits, kept as they were: the handler has a single work item to open devices, so if two matching devices connect at the same moment (for example a USB HID touchscreen already plugged in when the governor starts), only the second is opened, and unplugging the first later underflows its open count; a failed `input_open_device()` leaks the handle. On Glass only the touchpad matches, and it is never removed.
 
 Size, from the CI artifacts of run 39650912927 (before the patches): the `tuned` `zImage` is 4,839,160 bytes, against 5,075,816 for `stock` (236,656 bytes, 4.7%, smaller).
 

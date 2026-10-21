@@ -109,9 +109,11 @@ test_input_boost() {
     check "input-boost off value" 0 "$(val devices/system/cpu/cpufreq/interactive/input_boost)"
     out=$(run input-boost on 2>&1); status=$?
     check "input-boost on exit" 0 "$status"
+    check "input-boost on output" "" "$out"
     check "input-boost on value" 1 "$(val devices/system/cpu/cpufreq/interactive/input_boost)"
     run input-boost maybe >/dev/null 2>&1; check "input-boost bad arg exit" 2 $?
     run input-boost >/dev/null 2>&1; check "input-boost no arg exit" 2 $?
+    run input-boost off extra >/dev/null 2>&1; check "input-boost extra arg exit" 2 $?
     check "input-boost bad arg untouched" 1 "$(val devices/system/cpu/cpufreq/interactive/input_boost)"
     run cool >/dev/null 2>&1
     check "cool leaves input_boost" 1 "$(val devices/system/cpu/cpufreq/interactive/input_boost)"

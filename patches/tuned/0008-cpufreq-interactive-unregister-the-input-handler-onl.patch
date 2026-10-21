@@ -1,0 +1,57 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: OpenMyGlass <openmyglass@users.noreply.github.com>
+Date: Thu, 22 Oct 2026 00:00:25 +0200
+Subject: [PATCH 3/3] cpufreq: interactive: unregister the input handler only
+ if registered
+
+input_register_handler() can fail: it takes input_mutex with
+mutex_lock_interruptible(), so a signal to the task that starts the
+governor (for example a write to scaling_governor) makes it return
+-EINTR. The governor then only warns and carries on, but the last
+CPUFREQ_GOV_STOP calls input_unregister_handler() anyway, which does
+list_del() on a handler that was never added to the input core's lists.
+
+Remember whether the registration succeeded and unregister only then.
+A failed registration still leaves the governor running without the
+input boost, as before.
+
+This change is licensed under GPL-2.0-only, like the file it changes.
+---
+ drivers/cpufreq/cpufreq_interactive.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/cpufreq/cpufreq_interactive.c b/drivers/cpufreq/cpufreq_interactive.c
+index bf53b46..a1f0d08 100644
+--- a/drivers/cpufreq/cpufreq_interactive.c
++++ b/drivers/cpufreq/cpufreq_interactive.c
+@@ -121,6 +121,8 @@ struct cpufreq_interactive_inputopen {
+ 
+ static struct cpufreq_interactive_inputopen inputopen;
+ static struct workqueue_struct *inputopen_wq;
++/* Set while cpufreq_interactive_input_handler is registered. */
++static bool input_handler_registered;
+ 
+ /*
+  * Max additional time to wait in idle, beyond timer_rate, at speeds above
+@@ -1217,6 +1219,8 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
+ 		if (rc)
+ 			pr_warn("%s: failed to register input handler\n",
+ 				__func__);
++		else
++			input_handler_registered = true;
+ 
+ 		idle_notifier_register(&cpufreq_interactive_idle_nb);
+ 		cpufreq_register_notifier(
+@@ -1244,7 +1248,11 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
+ 		cpufreq_unregister_notifier(
+ 			&cpufreq_notifier_block, CPUFREQ_TRANSITION_NOTIFIER);
+ 		idle_notifier_unregister(&cpufreq_interactive_idle_nb);
+-		input_unregister_handler(&cpufreq_interactive_input_handler);
++		if (input_handler_registered) {
++			input_unregister_handler(
++				&cpufreq_interactive_input_handler);
++			input_handler_registered = false;
++		}
+ 		sysfs_remove_group(cpufreq_global_kobject,
+ 				&interactive_attr_group);
+ 		mutex_unlock(&gov_lock);

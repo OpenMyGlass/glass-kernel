@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: OpenMyGlass <openmyglass@users.noreply.github.com>
 Date: Wed, 21 Oct 2026 23:39:52 +0200
-Subject: [PATCH 2/2] cpufreq: interactive: default input_boost to 1
+Subject: [PATCH 2/3] cpufreq: interactive: default input_boost to 1
 
 Turn the touchscreen input boost on by default, so that the Glass
 touchpad raises the CPUs to hispeed_freq on the first report of a swipe
@@ -12,16 +12,17 @@ On Glass the matching device is the Synaptics touchpad, driven by the
 RMI4 F11 driver ("sensor00fn11"). It reports EV_ABS with
 ABS_MT_POSITION_X/Y (multi-touch protocol A) and has no BTN_TOUCH,
 ABS_X or ABS_Y, so it matches the first entry of the id table (the
-"touchscreen" one) and not the "touchpad" one. No other input driver built for notle reports
-the multi-touch axes (the light and proximity sensor uses ABS_MISC and
-ABS_DISTANCE, the IMU is an IIO device). A USB or Bluetooth HID device,
-or a uinput device, with those axes would match too.
+"touchscreen" one) and not the "touchpad" one. No other input driver
+built for notle reports the multi-touch axes: the light and proximity
+sensor uses ABS_MISC and ABS_DISTANCE, and the IMU is an IIO device. A
+USB HID or uinput device with those axes would match too.
 
-The boost never goes above hispeed_freq, which is limited to the
-policy's scaling_max_freq, so it uses no frequency or voltage that the
-governor could not already select. Each report sets the floor to
-hispeed_freq, so the speed is held there for min_sample_time (80 ms by
-default) after the last report. Writing 0 to
+The boost never asks for more than hispeed_freq, and omap_target()
+picks only table frequencies within scaling_min_freq..scaling_max_freq
+and clamps to the thermal limit, so it uses no frequency or voltage that
+the governor could not already select. Each report sets the floor to
+hispeed_freq, so the speed is held there for at least min_sample_time
+(80 ms by default) after the last report. Writing 0 to
 /sys/devices/system/cpu/cpufreq/interactive/input_boost turns it off.
 
 This change is licensed under GPL-2.0-only, like the file it changes.
@@ -31,7 +32,7 @@ This change is licensed under GPL-2.0-only, like the file it changes.
  2 files changed, 4 insertions(+), 2 deletions(-)
 
 diff --git a/Documentation/cpu-freq/governors.txt b/Documentation/cpu-freq/governors.txt
-index 5998c1b..0c61b9f 100644
+index 5998c1b..3e3e8e9 100644
 --- a/Documentation/cpu-freq/governors.txt
 +++ b/Documentation/cpu-freq/governors.txt
 @@ -277,7 +277,9 @@ on a write to boostpulse, before allowing speed to drop according to
@@ -40,8 +41,8 @@ index 5998c1b..0c61b9f 100644
  input_boost: If non-zero, boost speed of all CPUs to hispeed_freq on
 -touchscreen activity.  Default is 0.
 +touchscreen activity.  Default is 1.  The speed is held at
-+hispeed_freq or above for min_sample_time after the last input report,
-+then drops according to load as usual.
++hispeed_freq or above for at least min_sample_time after the last input
++report, then drops according to load as usual.
  
  
  3. The Governor Interface in the CPUfreq Core
