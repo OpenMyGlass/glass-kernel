@@ -14,7 +14,7 @@ Phase 4: lean tuned build (no lock debugging or runtime tracers; per-frequency a
 
 Phase 3: GPU module built from source (DDK 1.9@2166536), importing the same kernel symbols with the same CRCs as the stock module (not yet run on hardware). See [`docs/gpu-module.md`](docs/gpu-module.md).
 
-Phase 2: tuning prepared, not yet measured on hardware. There are runtime profiles (`tuning/omg-tune.sh`: `stock`, `balanced`, `cool`) and a `tuned` build variant (deadline I/O scheduler, no debug-only statistics). See [`docs/tuning.md`](docs/tuning.md).
+Phase 2: tuning prepared, not yet measured on hardware. There are runtime profiles (`tuning/omg-tune.sh`: `stock`, `balanced`, `cool`, `eco`) and a `tuned` build variant (deadline I/O scheduler, no debug-only statistics). See [`docs/tuning.md`](docs/tuning.md).
 
 Phase 1: a reproducible build of Google's published kernel source, with no changes yet. Nothing here has been run on hardware yet.
 

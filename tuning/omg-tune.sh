@@ -1,7 +1,7 @@
 #!/system/bin/sh
 # OpenMyGlass CPU tuning profiles for Glass XE24 (OMAP4430), applied through sysfs.
 #
-#   omg-tune.sh stock|balanced|cool|status
+#   omg-tune.sh stock|balanced|cool|eco|status
 #   omg-tune.sh input-boost on|off   (tuned kernels: boost to hispeed_freq on touchpad input)
 #
 # Nothing is persistent: a reboot returns to the defaults of the running kernel build
@@ -27,6 +27,7 @@ profile_values() {
         stock)    echo "1008000 1008000 99 90 20000 80000 20000 cfq" ;;
         balanced) echo "1008000 1008000 99 90,800000:95 20000 60000 20000 deadline" ;;
         cool)     echo "800000 800000 99 90 20000 60000 30000 deadline" ;;
+        eco)      echo "600000 600000 99 90 20000 60000 30000 deadline" ;;
         *)        return 1 ;;
     esac
 }
@@ -115,7 +116,7 @@ spaced() {  # value
 [ -n "${OMG_LIB:-}" ] && return 0
 
 usage() {
-    echo "usage: $0 stock|balanced|cool|status" >&2
+    echo "usage: $0 stock|balanced|cool|eco|status" >&2
     echo "       $0 input-boost on|off" >&2
     exit 2
 }
@@ -132,7 +133,7 @@ case "${1:-}" in
             *) usage ;;
         esac
         exit "$failed" ;;
-    stock|balanced|cool) ;;
+    stock|balanced|cool|eco) ;;
     *) usage ;;
 esac
 
