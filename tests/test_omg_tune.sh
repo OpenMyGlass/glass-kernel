@@ -47,7 +47,7 @@ run eco >/dev/null 2>&1; check "eco exit" 0 $?
 check "eco max" 600000 "$(val devices/system/cpu/cpu0/cpufreq/scaling_max_freq)"
 check "eco hispeed" 600000 "$(val devices/system/cpu/cpufreq/interactive/hispeed_freq)"
 check "eco go_hispeed_load" 99 "$(val devices/system/cpu/cpufreq/interactive/go_hispeed_load)"
-check "eco target_loads" "90 " "$(val devices/system/cpu/cpufreq/interactive/target_loads)"
+check "eco target_loads" 90 "$(val devices/system/cpu/cpufreq/interactive/target_loads)"
 check "eco above_hispeed_delay" 20000 "$(val devices/system/cpu/cpufreq/interactive/above_hispeed_delay)"
 check "eco min_sample_time" 60000 "$(val devices/system/cpu/cpufreq/interactive/min_sample_time)"
 check "eco timer_rate" 30000 "$(val devices/system/cpu/cpufreq/interactive/timer_rate)"
