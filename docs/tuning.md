@@ -27,16 +27,16 @@ So above about 35 °C, which is normal when Glass is worn, the CPU is already li
 
 ## Runtime profiles (`tuning/omg-tune.sh`)
 
-| Value | stock | balanced | cool |
-|---|---|---|---|
-| `scaling_max_freq` (kHz) | 1008000 | 1008000 | 800000 |
-| `hispeed_freq` (kHz) | 1008000 | 1008000 | 800000 |
-| `go_hispeed_load` (%) | 99 | 99 | 99 |
-| `target_loads` (%) | 90 | `90 800000:95` | 90 |
-| `above_hispeed_delay` (µs) | 20000 | 20000 | 20000 |
-| `min_sample_time` (µs) | 80000 | 60000 | 60000 |
-| `timer_rate` (µs) | 20000 | 20000 | 30000 |
-| eMMC I/O scheduler | cfq | deadline | deadline |
+| Value | stock | balanced | cool | eco |
+|---|---|---|---|---|
+| `scaling_max_freq` (kHz) | 1008000 | 1008000 | 800000 | 600000 |
+| `hispeed_freq` (kHz) | 1008000 | 1008000 | 800000 | 600000 |
+| `go_hispeed_load` (%) | 99 | 99 | 99 | 99 |
+| `target_loads` (%) | 90 | `90 800000:95` | 90 | 90 |
+| `above_hispeed_delay` (µs) | 20000 | 20000 | 20000 | 20000 |
+| `min_sample_time` (µs) | 80000 | 60000 | 60000 | 60000 |
+| `timer_rate` (µs) | 20000 | 20000 | 30000 | 30000 |
+| eMMC I/O scheduler | cfq | deadline | deadline | deadline |
 
 - Every profile sets `hispeed_freq` equal to `scaling_max_freq`. Because `hispeed_freq` is the governor's ceiling on Glass, a lower value would cap the speed, and on any kernel without `0009` (stock XE24 and the `stock` build) it would make the CPU drop to 300 MHz under high load. A frequency cap is set with `scaling_max_freq` instead, which works the same on every kernel. When switching profiles, the script writes `hispeed_freq` before `scaling_max_freq` when raising and after it when lowering, so `hispeed_freq` is never below the maximum, even for a moment. If `scaling_max_freq` cannot be lowered, `hispeed_freq` is left alone; if `hispeed_freq` cannot be raised, `scaling_max_freq` is left alone; either failure is reported (exit 1).
 - So `above_hispeed_delay` has no effect in these profiles (there is no speed above `hispeed_freq`), and they write the stock value.
@@ -44,6 +44,7 @@ So above about 35 °C, which is normal when Glass is worn, the CPU is already li
 - **balanced** keeps bursts up to 1008 MHz, but needs more load to get there: at 800 MHz and above the target load is 95% instead of 90%, so it moves from 800 MHz to 1008 MHz only above 95% load at 800 MHz (or at 99% load, from any speed, like stock). It also holds a speed for 60 ms instead of 80 ms before dropping.
 - The profiles do not set `io_is_busy` or `input_boost`; `status` shows them when present. `omg-tune.sh input-boost on|off` sets `input_boost` on its own.
 - **cool** never uses the 1.388 V NITRO point: its maximum is 800 MHz. It mostly differs from stock when Glass is cool, for example right after waking up. It also samples load every 30 ms instead of 20 ms.
+- **eco** caps the CPU at 600 MHz, the second-lowest OPP, and otherwise equals `cool`. Use it when you want less heat and more battery under load and accept a slower device: a CPU-bound task runs about 25% slower than under `cool` (600 against 800 MHz) and 40% slower than `stock` at 1008 MHz. It changes nothing at idle, where the CPU still drops to 300 MHz, so a screen-off or light workload costs the same as under `cool`. Per the OPP table (`arch/arm/mach-omap2/opp4xxx_data.c` at commit `989d925`), 600 MHz is OPP100 at a nominal 1.200 V (lines 95 and 228) and 800 MHz is OPP-Turbo at 1.325 V (lines 96 and 230); SmartReflex trims these at runtime, and `eco` writes no voltage. Lowering the maximum only removes the 800 and 1008 MHz points from use: nothing is raised, and the thermal table is untouched (it can still cap lower).
 - Before this change, `balanced` and `cool` set `hispeed_freq` to 600 MHz. Because of the ceiling, they never ran above 600 MHz (not 1008 or 800 MHz as described then), and under high load they could fall to 300 MHz instead.
 
 To try one over adb (needs root adb, from glass-rom's insecure boot image):
@@ -51,7 +52,7 @@ To try one over adb (needs root adb, from glass-rom's insecure boot image):
 ```sh
 adb root
 adb push tuning/omg-tune.sh /data/local/tmp/
-adb shell sh /data/local/tmp/omg-tune.sh cool
+adb shell sh /data/local/tmp/omg-tune.sh cool   # or eco, balanced, stock
 adb shell sh /data/local/tmp/omg-tune.sh status
 ```
 
@@ -165,7 +166,7 @@ The GPU modules are byte-identical to those of the input-boost build above, so t
 
 First, on a freshly booted device, run `omg-tune.sh status` before applying anything, then again after a screen off/on cycle. If the values differ from the kernel defaults above, the system sets its own: record them, and decide whether `stock` should restore those instead.
 
-Then, for each profile, starting at full charge and room temperature, run three 30-minute scenarios:
+Then, for each profile (`stock`, `balanced`, `cool` and `eco`), starting at full charge and room temperature, run three 30-minute scenarios:
 1. idle with the screen off;
 2. turn-by-turn navigation from OpenMyGlass with the screen on;
 3. video recording.
@@ -178,4 +179,4 @@ Record, every 30 s, over adb:
 - **frequency residency:** `cat /sys/devices/system/cpu/cpu0/cpufreq/stats/time_in_state`, read at the start and the end;
 - **smoothness:** dropped frames in navigation card updates and recording (`dumpsys gfxinfo` where available).
 
-A profile becomes the default only if it lowers drain or temperature without visible stutter. Results go in an issue, with the raw logs attached.
+For `eco`, also record how much longer the work takes (for example navigation card update latency and recording frame drops) against `cool`, since the cap trades speed for heat and drain; the expected cost is about 25% on CPU-bound work. A profile becomes the default only if it lowers drain or temperature without visible stutter. Results go in an issue, with the raw logs attached.

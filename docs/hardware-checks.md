@@ -57,7 +57,7 @@ None of these has been run: no Glass is available. Only with the owner present, 
 1. **Before (stock kernel, read-only):** on stock XE24, `omg-tune.sh status` after boot and after a screen off/on cycle. Record `hispeed_freq` and `scaling_max_freq`: if the system writes a `hispeed_freq` below the maximum, stock XE24 itself is affected by the drop to the lowest speed.
 2. **Clamp:** on the `tuned` kernel, `echo 600000 > /sys/devices/system/cpu/cpufreq/interactive/hispeed_freq` (keep `scaling_max_freq` at 1008000), then run a steady CPU load on both cores (for example two `adb shell 'while :; do :; done' &`) for 30 s. `scaling_cur_freq`, read every second, stays at 600000; `time_in_state` grows at 600 MHz, not at 300 MHz and not above 600 MHz. Stop the load and write `hispeed_freq` back to 1008000 (or reboot).
 3. **For comparison, the stock build** (only if the owner wants to see the bug): the same steps on the `stock` kernel show `scaling_cur_freq` falling to 300000 under the load. This is the stock behaviour, run only from RAM.
-4. **Profiles:** after `omg-tune.sh cool`, `status` shows `hispeed_freq: 800000` and `scaling_max_freq: 800000`; after `omg-tune.sh stock`, both are 1008000.
+4. **Profiles:** after `omg-tune.sh cool`, `status` shows `hispeed_freq: 800000` and `scaling_max_freq: 800000`; after `omg-tune.sh eco`, both are 600000; after `omg-tune.sh stock`, both are 1008000.
 
 ## Debugging a boot with a normal USB cable
 

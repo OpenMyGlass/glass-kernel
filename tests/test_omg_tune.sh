@@ -43,6 +43,16 @@ check "cool above_hispeed_delay" 20000 "$(val devices/system/cpu/cpufreq/interac
 check "cool timer_rate" 30000 "$(val devices/system/cpu/cpufreq/interactive/timer_rate)"
 check "cool scheduler" deadline "$(val block/mmcblk0/queue/scheduler)"
 
+run eco >/dev/null 2>&1; check "eco exit" 0 $?
+check "eco max" 600000 "$(val devices/system/cpu/cpu0/cpufreq/scaling_max_freq)"
+check "eco hispeed" 600000 "$(val devices/system/cpu/cpufreq/interactive/hispeed_freq)"
+check "eco go_hispeed_load" 99 "$(val devices/system/cpu/cpufreq/interactive/go_hispeed_load)"
+check "eco target_loads" "90 " "$(val devices/system/cpu/cpufreq/interactive/target_loads)"
+check "eco above_hispeed_delay" 20000 "$(val devices/system/cpu/cpufreq/interactive/above_hispeed_delay)"
+check "eco min_sample_time" 60000 "$(val devices/system/cpu/cpufreq/interactive/min_sample_time)"
+check "eco timer_rate" 30000 "$(val devices/system/cpu/cpufreq/interactive/timer_rate)"
+check "eco scheduler" deadline "$(val block/mmcblk0/queue/scheduler)"
+
 run stock >/dev/null 2>&1
 check "stock max" 1008000 "$(val devices/system/cpu/cpu0/cpufreq/scaling_max_freq)"
 check "stock go_hispeed_load" 99 "$(val devices/system/cpu/cpufreq/interactive/go_hispeed_load)"
@@ -190,6 +200,18 @@ run cool >/dev/null 2>&1
 check "other governor untouched" 99 "$(val devices/system/cpu/cpufreq/interactive/go_hispeed_load)"
 check "max still capped" 800000 "$(val devices/system/cpu/cpu0/cpufreq/scaling_max_freq)"
 rm -rf "$root"
+
+# eco never raises the maximum: from every profile it ends at or below the previous maximum.
+for from in stock balanced cool; do
+    setup
+    run "$from" >/dev/null 2>&1
+    before=$(val devices/system/cpu/cpu0/cpufreq/scaling_max_freq)
+    run eco >/dev/null 2>&1
+    after=$(val devices/system/cpu/cpu0/cpufreq/scaling_max_freq)
+    [ "$after" -le "$before" ] || { echo "FAIL: eco raised max from $from: $before -> $after"; fail=1; }
+    check "eco after $from hispeed equals max" "$after" "$(val devices/system/cpu/cpufreq/interactive/hispeed_freq)"
+    rm -rf "$root"
+done
 
 # Unknown profile is refused and changes nothing.
 setup
