@@ -35,7 +35,14 @@ The 3.4 kernel needs an old GCC, so builds run in a pinned container (`Dockerfil
 ```sh
 scripts/build-in-container.sh    # docker or podman: fetches src/ and builds
 VARIANT=tuned-stable scripts/build-in-container.sh    # or tuned; the default is stock
+VARIANT=modelb scripts/build-in-container.sh          # plain-Linux Model B base (devtmpfs, fbcon)
+VARIANT=modelb-power scripts/build-in-container.sh    # Model B energy-policy variant
 ```
+
+The `modelb` and `modelb-power` variants build on the 3.4.113 (`tuned-stable`)
+source. `modelb` is the plain-Linux (Alpine/musl) base and `modelb-power` adds a
+power-optimizing config overlay; see [`docs/model-b-energy.md`](docs/model-b-energy.md)
+for the energy policy and the glassd sysfs hooks.
 
 The kernel tree is kept in a container volume (`glass-kernel-src`) because Linux 3.4 has paths that differ only by case, which a default macOS volume cannot hold.
 

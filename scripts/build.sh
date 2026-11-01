@@ -54,25 +54,34 @@ export KCFLAGS="-Wno-builtin-macro-redefined -include $OUT/build-date.h"
 make -C src O="$BUILD" notle_defconfig
 # scripts/config in 3.4 takes option names without the CONFIG_ prefix.
 opt_name() { echo "${1#CONFIG_}"; }
-if [ "$TUNED" = yes ]; then
-    # Apply the fragment, let Kconfig resolve dependencies, then check nothing was dropped.
-    grep -v '^#\( \|$\)' configs/tuned.config | grep . > "$BUILD/fragment" || true
+if [ -n "${CONFIG_OVERLAYS:-}" ]; then
+    # Apply every overlay in order (a later one may override an earlier one), let
+    # Kconfig resolve dependencies, then check nothing we asked for was dropped.
+    # The positive (=y / =val) lines of all overlays are collected into one fragment.
+    : > "$BUILD/fragment"
+    for cfg in $CONFIG_OVERLAYS; do
+        grep -v '^#\( \|$\)' "$cfg" | grep . >> "$BUILD/fragment" || true
+    done
     while read -r line; do
         case "$line" in
             *=y) src/scripts/config --file "$BUILD/.config" --enable "$(opt_name "${line%%=*}")" ;;
             *=*) src/scripts/config --file "$BUILD/.config" --set-val "$(opt_name "${line%%=*}")" "${line#*=}" ;;
         esac
     done < "$BUILD/fragment"
-    sed -n 's/^# \(CONFIG_[A-Z0-9_]*\) is not set$/\1/p' configs/tuned.config | while read -r opt; do
-        src/scripts/config --file "$BUILD/.config" --disable "$(opt_name "$opt")"
+    for cfg in $CONFIG_OVERLAYS; do
+        sed -n 's/^# \(CONFIG_[A-Z0-9_]*\) is not set$/\1/p' "$cfg" | while read -r opt; do
+            src/scripts/config --file "$BUILD/.config" --disable "$(opt_name "$opt")"
+        done
     done
     yes "" | make -C src O="$BUILD" oldconfig >/dev/null
     while read -r line; do
         grep -qxF "$line" "$BUILD/.config" || { echo "error: Kconfig dropped '$line'" >&2; exit 1; }
     done < "$BUILD/fragment"
-    sed -n 's/^\(# CONFIG_[A-Z0-9_]* is not set\)$/\1/p' configs/tuned.config | while read -r line; do
-        opt=${line#\# }; opt=${opt%% *}
-        if grep -q "^$opt=" "$BUILD/.config"; then echo "error: Kconfig kept $opt" >&2; exit 1; fi
+    for cfg in $CONFIG_OVERLAYS; do
+        sed -n 's/^\(# CONFIG_[A-Z0-9_]* is not set\)$/\1/p' "$cfg" | while read -r line; do
+            opt=${line#\# }; opt=${opt%% *}
+            if grep -q "^$opt=" "$BUILD/.config"; then echo "error: Kconfig kept $opt" >&2; exit 1; fi
+        done
     done
 fi
 make -C src O="$BUILD" -j"$(nproc)" zImage
