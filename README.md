@@ -4,17 +4,19 @@ Kernel builds for Google Glass Explorer Edition on its final firmware, XE24 (TI 
 
 ## Status
 
-Fix: on Glass, `hispeed_freq` is the interactive governor's ceiling, and below the maximum it made the CPU drop to its lowest speed under load. The `tuned` builds clamp to it instead (`patches/tuned/0009`), and the `balanced` and `cool` profiles now keep it at their maximum. Not run on hardware. See [`docs/tuning.md`](docs/tuning.md#hispeed_freq-as-a-ceiling-patchestuned0009).
+Hardware validation (first real Glass, XE24): [`docs/hardware-validation-2026-11-01.md`](docs/hardware-validation-2026-11-01.md).
 
-Phase 6: touchpad input boost in the `tuned` and `tuned-stable` builds (the interactive governor raises the CPU to `hispeed_freq` on touchpad input; `input_boost` turns it off). Not run on hardware. See [`docs/tuning.md`](docs/tuning.md#touchpad-input-boost-patchestuned00060008).
+Fix: on Glass, `hispeed_freq` is the interactive governor's ceiling, and below the maximum it made the CPU drop to its lowest speed under load. The `tuned` builds clamp to it instead (`patches/tuned/0009`), and the `balanced` and `cool` profiles now keep it at their maximum. **Verified on hardware (2026-11-01):** under a two-core load with the `cool` profile the CPU held at the 800 MHz cap and never dropped to 300 MHz. See [`docs/tuning.md`](docs/tuning.md#hispeed_freq-as-a-ceiling-patchestuned0009).
 
-Phase 5: a `tuned-stable` variant, the `tuned` build on Linux 3.4.113, the final linux-3.4.y release (1450 upstream fixes merged into Google's source). Not run on hardware. See [`docs/stable-merge.md`](docs/stable-merge.md).
+Phase 6: touchpad input boost in the `tuned` and `tuned-stable` builds (the interactive governor raises the CPU to `hispeed_freq` on touchpad input; `input_boost` turns it off). **Verified on hardware (2026-11-01):** injected touchpad input produced `cpufreq_interactive_boost: input` ftrace events, and `input_boost=0` stopped them. See [`docs/tuning.md`](docs/tuning.md#touchpad-input-boost-patchestuned00060008).
 
-Phase 4: lean tuned build (no lock debugging or runtime tracers; per-frequency above_hispeed_delay, io_is_busy). Not measured on hardware. See [`docs/tuning.md`](docs/tuning.md).
+Phase 5: a `tuned-stable` variant, the `tuned` build on Linux 3.4.113, the final linux-3.4.y release (1450 upstream fixes merged into Google's source). **Verified on hardware (2026-11-01):** 3.4.113 boots, the GPU module loads with no SGXInit mismatch, and the display renders. See [`docs/stable-merge.md`](docs/stable-merge.md).
 
-Phase 3: GPU module built from source (DDK 1.9@2166536), importing the same kernel symbols with the same CRCs as the stock module (not yet run on hardware). See [`docs/gpu-module.md`](docs/gpu-module.md).
+Phase 4: lean tuned build (no lock debugging or runtime tracers; per-frequency above_hispeed_delay, io_is_busy). **Verified on hardware (2026-11-01):** the build boots; `input_boost` and `io_is_busy` are present and the `deadline` scheduler is active. See [`docs/tuning.md`](docs/tuning.md).
 
-Phase 2: tuning prepared, not yet measured on hardware. There are runtime profiles (`tuning/omg-tune.sh`: `stock`, `balanced`, `cool`, `eco`) and a `tuned` build variant (deadline I/O scheduler, no debug-only statistics). See [`docs/tuning.md`](docs/tuning.md).
+Phase 3: GPU module built from source (DDK 1.9@2166536), importing the same kernel symbols with the same CRCs as the stock module. **Verified on hardware (2026-11-01):** the module loads `Live`, dmesg shows `PVRSRVDriverProbe` with no SGXInit build/DDK mismatch, and SurfaceFlinger renders. See [`docs/gpu-module.md`](docs/gpu-module.md).
+
+Phase 2: tuning **verified on hardware (2026-11-01)**: the `omg-tune.sh` `stock`/`cool`/`eco` profiles set `hispeed_freq`, `scaling_max_freq` and the I/O scheduler as specified. There are runtime profiles (`tuning/omg-tune.sh`: `stock`, `balanced`, `cool`, `eco`) and a `tuned` build variant (deadline I/O scheduler, no debug-only statistics). See [`docs/tuning.md`](docs/tuning.md).
 
 Phase 1: a reproducible build of Google's published kernel source, with no changes yet. Nothing here has been run on hardware yet.
 
