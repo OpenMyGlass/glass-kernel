@@ -6,6 +6,7 @@
 #   modelb        tuned-stable plus configs/modelb.config: a plain-Linux (Alpine/musl)
 #                 base (devtmpfs, VT + framebuffer console) for Model B.
 #   modelb-power  modelb plus configs/modelb-power.config: the energy-policy overlay.
+#   modelb-camera modelb plus configs/modelb-camera.config: the camera-capture overlay.
 # CONFIG_OVERLAYS is the ordered list of config fragments applied over notle_defconfig;
 # a later fragment may override an earlier one.
 # shellcheck disable=SC2034  # the variables are used by the scripts that source this file
@@ -13,10 +14,10 @@ VARIANT=${VARIANT:-stock}
 case "$VARIANT" in
     stock|tuned)
         SRC_REPO=$REPO SRC_BRANCH=$BRANCH SRC_COMMIT=$COMMIT SRC_VERSION=$EXPECTED_VERSION ;;
-    tuned-stable|modelb|modelb-power)
+    tuned-stable|modelb|modelb-power|modelb-camera)
         SRC_REPO=$STABLE_REPO SRC_BRANCH=$STABLE_BRANCH SRC_COMMIT=$STABLE_COMMIT
         SRC_VERSION=$STABLE_EXPECTED_VERSION ;;
-    *) echo "error: VARIANT must be stock, tuned, tuned-stable, modelb or modelb-power" >&2; exit 1 ;;
+    *) echo "error: VARIANT must be stock, tuned, tuned-stable, modelb, modelb-power or modelb-camera" >&2; exit 1 ;;
 esac
 TUNED=no
 CONFIG_OVERLAYS=""
@@ -26,4 +27,6 @@ case "$VARIANT" in
     modelb) TUNED=yes; CONFIG_OVERLAYS="configs/tuned.config configs/modelb.config" ;;
     modelb-power) TUNED=yes
         CONFIG_OVERLAYS="configs/tuned.config configs/modelb.config configs/modelb-power.config" ;;
+    modelb-camera) TUNED=yes
+        CONFIG_OVERLAYS="configs/tuned.config configs/modelb.config configs/modelb-camera.config" ;;
 esac

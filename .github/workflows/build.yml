@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 60
     strategy:
       matrix:
-        variant: [stock, tuned, tuned-stable, modelb, modelb-power]
+        variant: [stock, tuned, tuned-stable, modelb, modelb-power, modelb-camera]
     steps:
       - uses: actions/checkout@v4
         with:

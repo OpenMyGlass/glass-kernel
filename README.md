@@ -37,12 +37,17 @@ scripts/build-in-container.sh    # docker or podman: fetches src/ and builds
 VARIANT=tuned-stable scripts/build-in-container.sh    # or tuned; the default is stock
 VARIANT=modelb scripts/build-in-container.sh          # plain-Linux Model B base (devtmpfs, fbcon)
 VARIANT=modelb-power scripts/build-in-container.sh    # Model B energy-policy variant
+VARIANT=modelb-camera scripts/build-in-container.sh   # Model B camera-capture variant
 ```
 
-The `modelb` and `modelb-power` variants build on the 3.4.113 (`tuned-stable`)
-source. `modelb` is the plain-Linux (Alpine/musl) base and `modelb-power` adds a
-power-optimizing config overlay; see [`docs/model-b-energy.md`](docs/model-b-energy.md)
-for the energy policy and the glassd sysfs hooks.
+The `modelb`, `modelb-power` and `modelb-camera` variants build on the 3.4.113
+(`tuned-stable`) source. `modelb` is the plain-Linux (Alpine/musl) base;
+`modelb-power` adds a power-optimizing config overlay (see
+[`docs/model-b-energy.md`](docs/model-b-energy.md)); `modelb-camera` pins the
+camera path on. **Note:** this 3.4 tree has no native V4L2 camera driver -- the
+Glass camera runs on the Ducati IPU via remoteproc/rpmsg/OMX, so there is no
+`/dev/video` for it; see [`docs/model-b-camera.md`](docs/model-b-camera.md) for
+the topology and the two realistic paths to a working camera.
 
 The kernel tree is kept in a container volume (`glass-kernel-src`) because Linux 3.4 has paths that differ only by case, which a default macOS volume cannot hold.
 
