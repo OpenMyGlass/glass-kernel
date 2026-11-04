@@ -79,3 +79,20 @@ Last resort, only if a kernel stops before any of the above can capture somethin
   - The OMAP's UART runs at 1.8 V logic (unverified), so the adapter must be a 1.8 V one. Which line is TX is unknown: connect the adapter's RX first.
   - The mux is switched only when its driver probes, so the earliest boot messages are not on the wire.
 - **Factory cable:** an ID-pin voltage above 4.2 V makes the kernel reboot into the bootloader, unless the command line has `androidboot.mode=factorycable`.
+
+## UART2 idle and deep sleep (`tuned`, `tuned-stable`; `0010`) — RUN on `tuned-stable`, 2026-11-04
+
+RAM boot only. `CM_L4PER_UART2_CLKCTRL` is at `0x4a009548`: `0x00010000` is stuck in transition, `0x00030000` is disabled.
+
+| Kernel and userspace | Register | ttyO1 tx | `uart2: _wait_target_disable failed` |
+|---|---|---|---|
+| Stock XE24, Android, at boot | `0x00010000` | not read | yes |
+| Stock XE24, Android, Bluetooth stack started | `0x00030000` | 59507 | yes, before that point |
+| `tuned-stable`, Alpine, port opened and closed | `0x00010000` | 0 | 4 times |
+| `tuned-stable`, Alpine, after one written byte | `0x00030000` | 1 | 4 times, all before the byte |
+| `tuned-stable` + reset at hwmod init only, Alpine | `0x00010000` | 0 | 4 times |
+| `tuned-stable` + `0010`, Alpine | `0x00030000` from boot | 0 | none (1 boot) |
+
+Cable off, `tuned-stable` + `0010`, Alpine, no Ducati firmware, `console=ttyO2,115200n8 vmalloc=500M rdinit=/init`, port never opened, 30 s per cycle: "Successfully put all powerdomains to target state" in 6 of 6 cycles, `core_pwrdm` OFF:6, `l4per_pwrdm` RET:6. Drain from `Qpassed`: 6.0, 7.3 and 8.1 mA with radios as booted; 5.5 and 6.8 mA with rfkill blocked; 9.3 mA with Bluetooth unblocked again. Thirty seconds is short for this gauge, so read these as a range. Stock Android measured about 5 mA.
+
+Android on `tuned-stable` + `0010` (cold-started in RAM with `fastboot boot`): Bluetooth reached state ON, ttyO1 tx 59507 and rx 5107 (the same counts as stock), no `uart2` failure. No device was paired, and no long run was done. `tuned` and `0010` have not been booted.
