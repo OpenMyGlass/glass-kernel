@@ -1,0 +1,149 @@
+From: OpenMyGlass <noreply@openmyglass.invalid>
+Subject: [PATCH] ARM: OMAP4: UART: reset an unused port so that it can idle
+
+A UART that has never transmitted can stay at CLKCTRL IDLEST 1 instead of 3
+after probe. UART2 then blocks L4PER, and CORE cannot leave ON in suspend.
+
+Set the SCR DMA bits before a softreset, as mainline 13dc04d0e5fd does, and do
+that reset once at the end of omap-serial probe, for every port but the console.
+A reset only at hwmod init does not help: probe touches the registers afterwards.
+---
+diff --git a/arch/arm/mach-omap2/omap_hwmod.c b/arch/arm/mach-omap2/omap_hwmod.c
+index 16cd6a67..9a2c0746 100644
+--- a/arch/arm/mach-omap2/omap_hwmod.c
++++ b/arch/arm/mach-omap2/omap_hwmod.c
+@@ -2203,6 +2203,18 @@ error:
+ 	return ret;
+ }
+ 
++/**
++ * omap_hwmod_ocp_softreset - full OCP softreset for a custom class reset
++ * @oh: struct omap_hwmod *
++ *
++ * For a class ->reset that must prepare the module first. Unlike
++ * omap_hwmod_softreset() this also waits for the reset to complete.
++ */
++int omap_hwmod_ocp_softreset(struct omap_hwmod *oh)
++{
++	return _ocp_softreset(oh);
++}
++
+ /**
+  * omap_hwmod_set_slave_idlemode - set the hwmod's OCP slave idlemode
+  * @oh: struct omap_hwmod *
+diff --git a/arch/arm/mach-omap2/omap_hwmod_44xx_data.c b/arch/arm/mach-omap2/omap_hwmod_44xx_data.c
+index 3d8bded6..7456202d 100644
+--- a/arch/arm/mach-omap2/omap_hwmod_44xx_data.c
++++ b/arch/arm/mach-omap2/omap_hwmod_44xx_data.c
+@@ -5530,9 +5530,33 @@ static struct omap_hwmod_class_sysconfig omap44xx_uart_sysc = {
+ 	.sysc_fields	= &omap_hwmod_sysc_type1,
+ };
+ 
++#define OMAP44XX_UART_SCR_OFFS		0x0040
++#define OMAP44XX_UART_SCR_DMAMODE_CTL	(1 << 0)
++#define OMAP44XX_UART_SCR_DMAMODE_1	(1 << 1)
++
++/*
++ * A UART that has not transmitted may not idle after a reset unless SCR has a
++ * basic DMA configuration when the reset happens, even with no DMA in use.
++ * Its CLKCTRL IDLEST then stays at 1 instead of 3, which blocks idle for the
++ * whole clockdomain. Same fix as mainline 13dc04d0e5fd, which does it in
++ * omap8250_soft_reset(). The reset clears SCR again. Two writes, as the UART
++ * needs for a change of the DMA mode bits.
++ */
++static int omap44xx_uart_reset(struct omap_hwmod *oh)
++{
++	omap_hwmod_write(OMAP44XX_UART_SCR_DMAMODE_1, oh,
++			 OMAP44XX_UART_SCR_OFFS);
++	omap_hwmod_write(OMAP44XX_UART_SCR_DMAMODE_1 |
++			 OMAP44XX_UART_SCR_DMAMODE_CTL, oh,
++			 OMAP44XX_UART_SCR_OFFS);
++
++	return omap_hwmod_ocp_softreset(oh);
++}
++
+ static struct omap_hwmod_class omap44xx_uart_hwmod_class = {
+ 	.name	= "uart",
+ 	.sysc	= &omap44xx_uart_sysc,
++	.reset	= omap44xx_uart_reset,
+ };
+ 
+ /* uart1 */
+diff --git a/arch/arm/mach-omap2/serial.c b/arch/arm/mach-omap2/serial.c
+index bc6812eb..8a66abc3 100644
+--- a/arch/arm/mach-omap2/serial.c
++++ b/arch/arm/mach-omap2/serial.c
+@@ -94,6 +94,14 @@ static void omap_uart_enable_wakeup(struct platform_device *pdev, bool enable)
+ 		omap_hwmod_disable_wakeup(od->hwmods[0]);
+ }
+ 
++static void omap_uart_reset_for_idle(struct platform_device *pdev)
++{
++	struct omap_device *od = to_omap_device(pdev);
++
++	if (od)
++		omap_hwmod_reset(od->hwmods[0]);
++}
++
+ /*
+  * Errata i291: [UART]:Cannot Acknowledge Idle Requests
+  * in Smartidle Mode When Configured for DMA Operations.
+@@ -122,6 +130,7 @@ static void omap_uart_set_smartidle(struct platform_device *pdev)
+ #else
+ static void omap_uart_enable_wakeup(struct platform_device *pdev, bool enable)
+ {}
++static void omap_uart_reset_for_idle(struct platform_device *pdev) {}
+ static void omap_uart_set_noidle(struct platform_device *pdev) {}
+ static void omap_uart_set_smartidle(struct platform_device *pdev) {}
+ #endif /* CONFIG_PM */
+@@ -347,6 +356,7 @@ void __init omap_serial_init_port(struct omap_board_data *bdata,
+ 	omap_up.set_forceidle = omap_uart_set_smartidle;
+ 	omap_up.set_noidle = omap_uart_set_noidle;
+ 	omap_up.enable_wakeup = omap_uart_enable_wakeup;
++	omap_up.reset_for_idle = omap_uart_reset_for_idle;
+ 	omap_up.dma_rx_buf_size = info->dma_rx_buf_size;
+ 	omap_up.dma_rx_timeout = info->dma_rx_timeout;
+ 	omap_up.dma_rx_poll_rate = info->dma_rx_poll_rate;
+diff --git a/arch/arm/plat-omap/include/plat/omap-serial.h b/arch/arm/plat-omap/include/plat/omap-serial.h
+index 2234c230..277cda11 100644
+--- a/arch/arm/plat-omap/include/plat/omap-serial.h
++++ b/arch/arm/plat-omap/include/plat/omap-serial.h
+@@ -91,6 +91,7 @@ struct omap_uart_port_info {
+ 	void (*set_noidle)(struct platform_device *);
+ 	void (*enable_wakeup)(struct platform_device *, bool);
+ 	void (*rts_mux_write)(u16 val, int num);
++	void (*reset_for_idle)(struct platform_device *);
+ 	void (*wake_peer)(struct uart_port *);
+ };
+ 
+diff --git a/arch/arm/plat-omap/include/plat/omap_hwmod.h b/arch/arm/plat-omap/include/plat/omap_hwmod.h
+index fcc25716..7ebb5138 100644
+--- a/arch/arm/plat-omap/include/plat/omap_hwmod.h
++++ b/arch/arm/plat-omap/include/plat/omap_hwmod.h
+@@ -598,6 +598,7 @@ int omap_hwmod_set_slave_idlemode(struct omap_hwmod *oh, u8 idlemode);
+ int omap_hwmod_set_ocp_autoidle(struct omap_hwmod *oh, u8 autoidle);
+ 
+ int omap_hwmod_reset(struct omap_hwmod *oh);
++int omap_hwmod_ocp_softreset(struct omap_hwmod *oh);
+ void omap_hwmod_ocp_barrier(struct omap_hwmod *oh);
+ 
+ void omap_hwmod_write(u32 v, struct omap_hwmod *oh, u16 reg_offs);
+diff --git a/drivers/tty/serial/omap-serial.c b/drivers/tty/serial/omap-serial.c
+index 617e3491..903d5cc4 100644
+--- a/drivers/tty/serial/omap-serial.c
++++ b/drivers/tty/serial/omap-serial.c
+@@ -1649,6 +1649,14 @@ static int __devinit serial_omap_probe(struct platform_device *pdev)
+ 	if (omap_up_info->enable_wakeup)
+ 		omap_up_info->enable_wakeup(pdev, false);
+ 
++	/*
++	 * Probe has touched the registers of a port that has never transmitted,
++	 * and it would not idle. Opening the port sets all of them again.
++	 */
++	if (omap_up_info->reset_for_idle &&
++	    !(up->port.cons && up->port.cons->index == up->port.line))
++		omap_up_info->reset_for_idle(pdev);
++
+ 	serial_omap_port_disable(up);
+ 	return 0;
+ 
