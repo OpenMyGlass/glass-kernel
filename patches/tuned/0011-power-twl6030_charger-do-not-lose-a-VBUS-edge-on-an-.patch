@@ -1,0 +1,135 @@
+From: giogandola98 <giogandola@gmail.com>
+Subject: [PATCH] power: twl6030_charger: do not lose a VBUS edge on an I2C error
+
+charger_ctrl_interrupt() reads CONTROLLER_STAT1 and acts on what changed. If
+that read fails it returns, and nothing reads the register again until the next
+controller interrupt. A VBUS_DET edge lost this way leaves the driver UNPLUGGED
+with the cable in: it does not charge, and the USB side keeps the system awake.
+Seen once on hardware: an omap_i2c timeout as the cable went in, then 98% to 75%
+over 1.7 hours.
+
+Run the same check from charger_work(), every 15 seconds while awake.
+---
+diff --git a/drivers/power/twl6030_charger.c b/drivers/power/twl6030_charger.c
+index 6e1d5751..450e4c66 100644
+--- a/drivers/power/twl6030_charger.c
++++ b/drivers/power/twl6030_charger.c
+@@ -308,6 +308,8 @@ struct charger_info {
+ 
+ 	/* charge control irq state */
+ 	u8 charge_control_state;
++	/* serializes charger_ctrl_sync(): the interrupt and the periodic work both run it */
++	struct mutex ctrl_mutex;
+ 
+ 	/* charge fault irq state */
+ 	u8 charge_fault_int1;
+@@ -669,14 +671,21 @@ error:
+ 	return ret;
+ }
+ 
+-static irqreturn_t charger_ctrl_interrupt(int irq, void *_di)
++/*
++ * Compare the controller status with what was last seen and act on any change. The interrupt only
++ * says that something changed, so a failed read here would lose a VBUS edge for good: the driver
++ * would stay UNPLUGGED, without charging, with the cable in. charger_work() runs this too, which
++ * retries after a failed read.
++ */
++static void charger_ctrl_sync(struct charger_info *di)
+ {
+-	struct charger_info *di = _di;
+ 	u8 stat_toggle, stat_reset, stat_set;
+ 	u8 reg_stat1, reg_hw_cond;
+ 	int charge_control_state;
+ 	int ret;
+ 
++	mutex_lock(&di->ctrl_mutex);
++
+ 	ret = twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &reg_stat1, CONTROLLER_STAT1);
+ 	if (ret)
+ 		goto i2c_error;
+@@ -727,10 +736,17 @@ static irqreturn_t charger_ctrl_interrupt(int irq, void *_di)
+ 
+ 	di->charge_control_state = reg_stat1;
+ 
+-	return IRQ_HANDLED;
++	mutex_unlock(&di->ctrl_mutex);
++	return;
+ 
+ i2c_error:
++	mutex_unlock(&di->ctrl_mutex);
+ 	dev_err(di->dev, "%s: error while accessing i2c: %d\n", __func__, ret);
++}
++
++static irqreturn_t charger_ctrl_interrupt(int irq, void *_di)
++{
++	charger_ctrl_sync(_di);
+ 	return IRQ_HANDLED;
+ }
+ 
+@@ -1006,6 +1022,8 @@ static void charger_work(struct work_struct *work)
+ 	bool limiting_active;
+ 	bool charge_source;
+ 
++	charger_ctrl_sync(di);
++
+ 	if (is_charging(di))
+ 		charger_pet_watchdog(di);
+ 
+@@ -1235,6 +1253,7 @@ static int __devinit charger_probe(struct platform_device *pdev)
+ 
+ 	wake_lock_init(&di->wake_lock, WAKE_LOCK_SUSPEND, "charger_wake_lock");
+ 	mutex_init(&di->mutex);
++	mutex_init(&di->ctrl_mutex);
+ 
+ 	di->wq = create_freezable_workqueue(dev_name(di->dev));
+ 	INIT_WORK(&di->work, charger_work);
+@@ -1293,6 +1312,24 @@ static int __devinit charger_probe(struct platform_device *pdev)
+ 		di->charger_supply_type = ret;
+ 	}
+ 
++	/*
++	 * Before the notifier and the interrupts: twl6030_usb can have unmasked the controller
++	 * interrupt already, and the work that any of them queues uses both of these.
++	 */
++	di->sdev.name = "invalid_charger";
++	ret = switch_dev_register(&di->sdev);
++	if (ret) {
++		dev_err(di->dev, "error registering switch device: %d\n", ret);
++		goto init_failed;
++	}
++
++	/* setup the led state */
++	di->led = twl6030_init_led_state(di->dev);
++	if (!di->led) {
++		dev_err(dev, "failed to alloc led state\n");
++		goto init_failed;
++	}
++
+ 	di->notifier.notifier_call = charger_usb_notifier_call;
+ 	ret = twl6030_usb_register_notifier(&di->notifier);
+ 	if (ret)
+@@ -1316,24 +1353,10 @@ static int __devinit charger_probe(struct platform_device *pdev)
+ 		goto chg_irq_fail;
+ 	}
+ 
+-	di->sdev.name = "invalid_charger";
+-	ret = switch_dev_register(&di->sdev);
+-	if (ret) {
+-		dev_err(di->dev, "error registering switch device: %d\n", ret);
+-		goto chg_irq_fail;
+-	}
+-
+ 	ret = sysfs_create_group(&dev->kobj, &charger_charger_attr_group);
+ 	if (ret)
+ 		dev_err(dev, "could not create sysfs files\n");
+ 
+-	/* setup the led state */
+-	di->led = twl6030_init_led_state(di->dev);
+-	if (!di->led) {
+-		dev_err(dev, "failed to alloc led state\n");
+-		goto chg_irq_fail;
+-	}
+-
+ 	/* kick ctrl isr to get initial state */
+ 	charger_ctrl_interrupt(0, di);
+ 
