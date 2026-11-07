@@ -1,0 +1,75 @@
+From: giogandola98 <giogandola@gmail.com>
+Subject: [PATCH] power: twl6030_charger: clear a latch the bootloader left
+
+The bootloader can leave EN_CHARGER set with CHARGE_DONE or CURRENT_TERM latched
+in CHARGERUSB_STATUS_INT2. The charger then delivers nothing, while the driver
+reports CHARGING, and it writes the same enable bit again, which changes nothing.
+Give it an off edge at probe when both are seen, before anything can wait on the
+sleep. One second is what was tested; a shorter gap has not been tried.
+---
+diff --git a/drivers/power/twl6030_charger.c b/drivers/power/twl6030_charger.c
+index 450e4c66..914137fd 100644
+--- a/drivers/power/twl6030_charger.c
++++ b/drivers/power/twl6030_charger.c
+@@ -79,6 +79,7 @@
+ /* CONTROLLER_CTRL1 */
+ #define CONTROLLER_CTRL1_EN_LINCH         (1 << 5)
+ #define CONTROLLER_CTRL1_EN_CHARGER       (1 << 4)
++#define CHARGER_RESTART_OFF_MS            1000
+ #define CONTROLLER_CTRL1_SEL_CHARGER      (1 << 3)
+ 
+ /* CONTROLLER_STAT1 */
+@@ -1206,6 +1207,44 @@ static const struct attribute_group charger_charger_attr_group = {
+ 	.attrs = charger_charger_attributes,
+ };
+ 
++/*
++ * The bootloader can leave the charger enabled with CHARGE_DONE or CURRENT_TERM latched. It then
++ * delivers nothing, and setting a bit that is already set does not restart it: only an off and on
++ * edge does. Runs before the notifier and the interrupts exist, so that nobody waits on the sleep,
++ * and charger_start_usb_charger() then turns it on with the limits as usual. A charger that is
++ * delivering is left alone.
++ */
++static void charger_clear_bootloader_latch(struct charger_info *di)
++{
++	u8 reg_ctrl1, reg_int2;
++	int tries = 3;
++	int ret;
++
++	do {
++		ret = twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &reg_ctrl1, CONTROLLER_CTRL1);
++		if (!ret)
++			ret = twl_i2c_read_u8(TWL6030_MODULE_CHARGER, &reg_int2,
++					CHARGERUSB_STATUS_INT2);
++		if (!ret && (reg_ctrl1 & CONTROLLER_CTRL1_EN_CHARGER) &&
++		    (reg_int2 & (CHARGE_DONE | CURRENT_TERM)))
++			ret = twl_i2c_write_u8(TWL6030_MODULE_CHARGER, 0, CONTROLLER_CTRL1);
++		else if (!ret) {
++			dev_info(di->dev, "from the bootloader: ctrl1=%02x int2=%02x\n",
++					reg_ctrl1, reg_int2);
++			return;
++		}
++	} while (ret && --tries);
++
++	if (ret) {
++		dev_err(di->dev, "%s: error while accessing i2c: %d\n", __func__, ret);
++		return;
++	}
++
++	dev_info(di->dev, "from the bootloader: ctrl1=%02x int2=%02x, restarting\n",
++			reg_ctrl1, reg_int2);
++	msleep(CHARGER_RESTART_OFF_MS);
++}
++
+ static int __devinit charger_probe(struct platform_device *pdev)
+ {
+ 	struct twl4030_charger_platform_data *pdata = pdev->dev.platform_data;
+@@ -1304,6 +1343,8 @@ static int __devinit charger_probe(struct platform_device *pdev)
+ 		goto usb_failed;
+ 	}
+ 
++	charger_clear_bootloader_latch(di);
++
+ 	/* get the current supply type, which may have been determined before
+ 	 * the notifier below has been registered */
+ 	ret = twl6030_usb_get_supply_type();
